@@ -74,4 +74,44 @@ for (old_name in colnames(rice_prod)) {
 }
 
 colnames(rice_prod)
+
+#hari
+library(dplyr)
+library(ggplot2)
+columns_of_interest <- 
+  c("Country","Year","Production(t)","Population","Land_Use(ha)")
+
+df_filtered <- rice_prod %>%
+  select(columns_of_interest)
+
+head(df_filtered)
+
+no_of_na = sum(is.na(df_filtered["Population"]))
+no_of_na
+
+ggplot(df_filtered, aes(Population)) +
+  geom_histogram(color = "#000000", fill = "#0099F8") +
+    labs(title = "Histogram of Population",
+       x = "Population",
+       y = "Count")
+
+# Load necessary libraries
+library(zoo)
+library(ggplot2)
+
+# Mean imputation using na.approx
+df_filtered["Population"] <- na.approx(df_filtered["Population"])
+
+ggplot(df_filtered, aes(x = Year, y = Population)) +
+  geom_line(color = "blue", size = 0.5) +  # Adjust line color and size
+  geom_point(color = "red", size = 1, alpha = 0.7) +
+  labs(title = "Population Over Time", x = "Year", y = "Population") +
+  theme_minimal() +  # Use a minimal theme
+  labs(title = "Time Series with Linear Imputation",  # Add title
+       x = "Time",  # Label for x-axis
+       y = "Values")  # Label for y-axis
+
+after_no_of_na = sum(is.na(df_filtered["Population"]))
+after_no_of_na
+
 ```
