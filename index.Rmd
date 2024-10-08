@@ -114,4 +114,26 @@ ggplot(df_filtered, aes(x = Year, y = Population)) +
 after_no_of_na = sum(is.na(df_filtered["Population"]))
 after_no_of_na
 
+#Population over time for each country
+ggplot(df_filtered, aes(x = Year, y = Population, color = Country)) +
+  geom_line(alpha=0.7, size=1) +
+  labs(title = "Population Over Time by Country", x = "Year", y = "Population")+ theme_minimal() +
+  theme(legend.position = "none")
+
+#total population by year
+total_population <- df_filtered %>%
+  group_by(Year) %>%
+  summarise(total_population = sum(Population))
+
+ggplot(total_population, aes(x = Year, y = total_population)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Total Population by Year", x = "Year", y = "Total Population") +
+  theme_minimal()
+
+#population distribution
+ggplot(df_filtered, aes(x = Population)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black") +
+  labs(title = "Distribution of Population", x = "Population", y = "Frequency") +
+  theme_minimal()
+
 ```
