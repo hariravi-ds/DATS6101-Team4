@@ -20,23 +20,34 @@ library(ezids)
 ```
 
 ```{r pi}
+#load the dataset
 rice_prod <- read.csv("C:/Users/HARI/Documents/DATS6101-Team4/Rice Production Data.csv")
+
+#display top six rows of the dataset
 head(rice_prod)
+
 xkabledplyhead(rice_prod, title = "Rice Production")
 ```
 
+```{r}
+#get the shape of dataset
+dim(rice_prod)
+```
+
 ```{r col}
+#get the column names of dataset
 colnames(rice_prod)
 ```
 
 ```{r modify}
 
+#defining name_map to rename the columns
 name_map <- c(
-  "Production..t." = "Production(t)",
+  "Production..t." = "Production",
   "production__tonnes__per_capita" = "Production_per_capita(kg)",
   "Production.per.capita..kg." = "Production_per_capita(kg)",
   "Yield..t.ha." = "Yield(t/ha)",
-  "Land.Use..ha." = "Land_Use(ha)",
+  "Land.Use..ha." = "Land_Use",
   "area_harvested__ha__per_capita" = "Area_Harvested(ha_per_capita)",
   "Land.Use.per.capita..m.." = "Land_Use_per_Capita",
   "Imports..t." = "Imports(t)",
@@ -67,42 +78,65 @@ name_map <- c(
   "Food.supply..Fat.g.per.capita.per.day." = "Food_supply(Fat_per_capita_per_day)"
 )
 
+#rename the columns based on name_map
 for (old_name in colnames(rice_prod)) {
   if (old_name %in% names(name_map)) {
     colnames(rice_prod)[colnames(rice_prod) == old_name] <- name_map[old_name]
   }
 }
 
+#displaying the changed column names
 colnames(rice_prod)
-
+```
+```{r}
 #hari
+# Load necessary libraries
 library(dplyr)
 library(ggplot2)
+library(zoo)
+
 columns_of_interest <- 
-  c("Country","Year","Production(t)","Population","Land_Use(ha)")
+  c("Country","Year","Production","Population","Land_Use")
 
 df_filtered <- rice_prod %>%
   select(columns_of_interest)
 
-head(df_filtered)
+df_filtered <- df_filtered[df_filtered$Year >= 1980 & df_filtered$Year <= 2020, ]
 
-no_of_na = sum(is.na(df_filtered["Population"]))
+dim(df_filtered)
+
+#to check the number of missing values for each column
+no_of_na = missing_values <- colSums(is.na(df_filtered))
 no_of_na
 
-ggplot(df_filtered, aes(Population)) +
+#removing countries for which all values are NA
+df_cleaned <- df_filtered %>%
+  group_by(Country) %>%
+  filter(any(!is.na(Land_Use))) %>%
+  ungroup()
+
+#removing countries for which all values are 0
+df_cleaned <- df_cleaned %>%
+  group_by(Country) %>%
+  filter(any(Land_Use > 0)) %>%
+  ungroup() 
+
+dim(df_cleaned)
+```
+```{r}
+
+ggplot(df_cleaned, aes(Population)) +
   geom_histogram(color = "#000000", fill = "#0099F8") +
     labs(title = "Histogram of Population",
        x = "Population",
        y = "Count")
 
-# Load necessary libraries
-library(zoo)
-library(ggplot2)
-
 # Mean imputation using na.approx
-df_filtered["Population"] <- na.approx(df_filtered["Population"])
+#df_cleaned["Population"] <- na.approx(df_cleaned["Population"])
+```
+```{r}
 
-ggplot(df_filtered, aes(x = Year, y = Population)) +
+ggplot(df_cleaned, aes(x = Year, y = Population)) +
   geom_line(color = "blue", size = 0.5) +  # Adjust line color and size
   geom_point(color = "red", size = 1, alpha = 0.7) +
   labs(title = "Population Over Time", x = "Year", y = "Population") +
@@ -111,17 +145,14 @@ ggplot(df_filtered, aes(x = Year, y = Population)) +
        x = "Time",  # Label for x-axis
        y = "Values")  # Label for y-axis
 
-after_no_of_na = sum(is.na(df_filtered["Population"]))
-after_no_of_na
-
 #Population over time for each country
-ggplot(df_filtered, aes(x = Year, y = Population, color = Country)) +
+ggplot(df_cleaned, aes(x = Year, y = Population, color = Country)) +
   geom_line(alpha=0.7, size=1) +
   labs(title = "Population Over Time by Country", x = "Year", y = "Population")+ theme_minimal() +
   theme(legend.position = "none")
 
 #total population by year
-total_population <- df_filtered %>%
+total_population <- df_cleaned %>%
   group_by(Year) %>%
   summarise(total_population = sum(Population))
 
@@ -131,9 +162,15 @@ ggplot(total_population, aes(x = Year, y = total_population)) +
   theme_minimal()
 
 #population distribution
-ggplot(df_filtered, aes(x = Population)) +
+ggplot(df_cleaned, aes(x = Population)) +
   geom_histogram(bins = 30, fill = "lightblue", color = "black") +
   labs(title = "Distribution of Population", x = "Population", y = "Frequency") +
   theme_minimal()
 
+
+```
+```{r}
+df_imputed <- df_cleaned %>%
+  group_by(Country) %>%
+  mutate(Population = na.approx(Population, na.rm = FALSE))
 ```
