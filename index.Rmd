@@ -30,12 +30,12 @@ xkabledplyhead(rice_prod, title = "Rice Production")
 ```
 
 ```{r}
-#get the shape of dataset
+#display the shape of dataset
 dim(rice_prod)
 ```
 
 ```{r col}
-#get the column names of dataset
+#display the column names of dataset
 colnames(rice_prod)
 ```
 
@@ -85,7 +85,7 @@ for (old_name in colnames(rice_prod)) {
   }
 }
 
-#displaying the changed column names
+#display the changed column names
 colnames(rice_prod)
 ```
 ```{r}
@@ -95,18 +95,21 @@ library(dplyr)
 library(ggplot2)
 library(zoo)
 
-columns_of_interest <- 
-  c("Country","Year","Production","Population","Land_Use")
+columns_of_interest <-
+  c("Country", "Year", "Production", "Population", "Land_Use")
 
 df_filtered <- rice_prod %>%
   select(columns_of_interest)
 
 #filtering data between 1980 and 2020
-df_filtered <- df_filtered[df_filtered$Year >= 1980 & df_filtered$Year <= 2020, ]
+df_filtered <- df_filtered[df_filtered$Year >= 1980 &
+                             df_filtered$Year <= 2020, ]
 
-#checking the dimension of filtered data
+#displaying the dimension of filtered data
 dim(df_filtered)
+```
 
+```{r}
 #to check the number of missing values for each column
 no_of_na = missing_values <- colSums(is.na(df_filtered))
 no_of_na
@@ -121,10 +124,10 @@ df_cleaned <- df_filtered %>%
 df_cleaned <- df_cleaned %>%
   group_by(Country) %>%
   filter(any(Land_Use > 0)) %>%
-  ungroup() 
+  ungroup()
 
 
-#checking the dimension of removing countries will all values as 0 or NA
+#display the dimension after removing countries with all values as 0 or NA
 dim(df_cleaned)
 
 # Calculate growth rates
@@ -132,7 +135,7 @@ population_data <- df_cleaned %>%
   mutate(GrowthRate = (Population - lag(Population)) / lag(Population))
 
 #calculating mean growth rate
-average_growth_rate <- mean(null_data$GrowthRate, na.rm = TRUE)
+average_growth_rate <- mean(population_data$GrowthRate, na.rm = TRUE)
 
 #function to impute data based on calcualted growth rate
 impute_population <- function(data, avg_growth) {
@@ -159,7 +162,7 @@ population_data$Land_Use <- na.approx(population_data$Land_Use)
 final_df <- population_data %>%
   select(columns_of_interest)
 
-final_df <- subset(final_df, Country != "Micronesia (FAO)")
+final_df <- final_df %>% filter(Country != "Micronesia (FAO)")
 
 colSums(is.na(final_df))
 ```
@@ -167,14 +170,16 @@ colSums(is.na(final_df))
 library(patchwork)
 
 plots <- list()
-for(col in c("Population","Production","Land_Use")){
+for (col in c("Population", "Production", "Land_Use")) {
   if (is.numeric(final_df[[col]])) {
-  p <- ggplot(final_df, aes_string(x = col)) +
-  geom_histogram(bins=30,color = "black", fill = "blue") +
-    labs(title = paste("Histogram of ",col),
-       x = col,
-       y = "Count")
-  plots[[col]] <- p 
+    p <- ggplot(final_df, aes_string(x = col)) +
+      geom_histogram(bins = 30,
+                     color = "black",
+                     fill = "blue") +
+      labs(title = paste("Histogram of ", col),
+           x = col,
+           y = "Count")
+    plots[[col]] <- p
   }
 }
 combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
@@ -187,55 +192,52 @@ print(combined_plot)
 plots <- list()
 
 # Loop through each parameter and create a scatter plot
-for (col in c("Population","Land_Use")) {  # Exclude the Production column
-  p <- ggplot(final_df, aes_string(x = "Production", y = col, color="Country")) +
+for (col in c("Population", "Land_Use")) {
+  p <- ggplot(final_df,
+              aes_string(x = "Production", y = col, color = "Country")) +
     geom_point() +
-    labs(title = paste("Scatter Plot of Production vs", col),
-         x = "Production",
-         y = col) +
+    labs(
+      title = paste("Scatter Plot of Production vs", col, "coloured by country"),
+      x = "Production",
+      y = col
+    ) +
     theme_minimal() +
     theme(legend.position = "none")
   
-  plots[[col]] <- p  # Store the plot in the list
+  plots[[col]] <- p  #Store the plot in the list
 }
 
-# Combine all plots into a single layout
-if (length(plots) > 0) {
-  combined_plot <- wrap_plots(plots, ncol = 1)  # Adjust ncol for layout
-  print(combined_plot)
-} else {
-  print("No parameters to plot.")
-}
+#Combine all plots into a single layout
+combined_plot <- wrap_plots(plots, ncol = 1)  # Adjust ncol for layout
+print(combined_plot)
 
-#scatter plot with production vs other parameters colured by year
-# Create a list to store plots
+#scatter plot with production vs other parameters coloured by year
+#Create a list to store plots
 plots <- list()
 
 # Loop through each parameter and create a scatter plot
-for (col in c("Population","Land_Use")) {  # Exclude the Production column
-  p <- ggplot(final_df, aes_string(x = "Production", y = col, color="Year")) +
+for (col in c("Population", "Land_Use")) {
+  p <- ggplot(final_df, aes_string(x = "Production", y = col, color = "Year")) +
     geom_point() +
-    labs(title = paste("Scatter Plot of Production vs", col),
-         x = "Production",
-         y = col) +
+    labs(
+      title = paste("Scatter Plot of Production vs", col, "coloured by year"),
+      x = "Production",
+      y = col
+    ) +
     theme_minimal() +
     theme(legend.position = "none")
   
-  plots[[col]] <- p  # Store the plot in the list
+  plots[[col]] <- p  #Store the plot in the list
 }
 
 # Combine all plots into a single layout
-if (length(plots) > 0) {
-  combined_plot <- wrap_plots(plots, ncol = 1)  # Adjust ncol for layout
-  print(combined_plot)
-} else {
-  print("No parameters to plot.")
-}
+combined_plot <- wrap_plots(plots, ncol = 1)  # Adjust ncol for layout
+print(combined_plot)
 
 #Production over time for each country
 ggplot(final_df, aes(x = Year, y = Production, color = Country)) +
-  geom_line(alpha=0.7, size=1) +
-  labs(title = "Production Over Time by Country", x = "Year", y = "Population")+ theme_minimal() +
+  geom_line(alpha = 0.7, size = 1) +
+  labs(title = "Production Over Time by Country", x = "Year", y = "Population") + theme_minimal() +
   theme(legend.position = "none")
 
 #total population by year
