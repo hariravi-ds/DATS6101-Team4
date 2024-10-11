@@ -169,6 +169,7 @@ colSums(is.na(final_df))
 ```{r}
 library(patchwork)
 
+#to see the distrubution of each column
 plots <- list()
 for (col in c("Population", "Production", "Land_Use")) {
   if (is.numeric(final_df[[col]])) {
@@ -182,6 +183,32 @@ for (col in c("Population", "Production", "Land_Use")) {
     plots[[col]] <- p
   }
 }
+combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
+print(combined_plot)
+
+#since each distribution is skewed considering log transformation to improve the symmetry
+
+copied <- final_df
+plots <- list()
+
+for (col in c("Population", "Production", "Land_Use")) {
+  if (is.numeric(copied[[col]])) {
+    # Create a new log-transformed column
+    copied <- copied %>%
+      mutate(!!sym(paste0("log_", col)) := log(copied[[col]] + 1))  # Adding 1 to avoid log(0)
+
+    # Create histogram for the log-transformed variable
+    p <- ggplot(copied, aes_string(x = paste0("log_", col))) +
+      geom_histogram(bins = 30, color = "black", fill = "blue") +
+      labs(title = paste("Histogram of log-transformed", col),
+           x = paste("log(", col,")", sep = ""),
+           y = "Count")
+    
+    plots[[col]] <- p
+  }
+}
+
+# Combine the plots
 combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
 print(combined_plot)
 ```
@@ -240,7 +267,7 @@ ggplot(final_df, aes(x = Year, y = Production, color = Country)) +
   labs(title = "Production Over Time by Country", x = "Year", y = "Population") + theme_minimal() +
   theme(legend.position = "none")
 
-#total population by year
+#total production by year
 total_prod <- final_df %>%
   group_by(Year) %>%
   summarise(total_prod = sum(Production))
@@ -250,4 +277,84 @@ ggplot(total_prod, aes(x = Year, y = total_prod)) +
   labs(title = "Total Production by Year", x = "Year", y = "Total Production") +
   theme_minimal()
 
+#to Calculate the average of it over countries, plot against the years Discuss the trend
+# Grouping by year and applying mean aggregation
+grouped_prod <- final_df %>%
+  group_by(Year) %>%
+  summarize(Production = mean(Production, na.rm = TRUE),
+            .groups = 'drop')
+
+# Plotting a scatterplot with year vs CO2 Emission
+ggplot(grouped_prod, aes(x = Production, y = Year)) +
+  geom_point() +
+  labs(title = 'Production vs Year', x = 'Production', y = 'Year') +
+  theme_minimal()
+```
+```{r}
+#subtract the average of that column for the country
+# Assuming 'final_df' is your data frame and the columns are specified
+copied_df <- final_df
+
+# Create a list to store the plots
+plots <- list()
+
+# Looping through each column to create scatterplots
+for (i in seq_along(c("Population", "Land_Use"))) {
+  col1 <- c("Population", "Land_Use", "Production")[i]
+  
+  # Centering the data by subtracting the country average
+  copied_df <- copied_df %>%
+    group_by(Country) %>%
+    mutate(!!col1 := get(col1) - mean(get(col1), na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Create scatter plot with production
+  p <- ggplot(copied_df, aes_string(x = col1, y = "Production")) +
+    geom_point(alpha = 0.7, color = 'blue') +
+    labs(
+      title = paste("Scatter Plot of", col1, "vs Production"),
+      x = col1,
+      y = "Production"
+    ) +
+    theme_minimal()
+  plots[[i]] <- p
+}
+
+# Arrange and display the plots
+combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
+print(combined_plot)
+```
+```{r}
+#subtract the average of that column for the year
+# Assuming 'final_df' is your data frame and the columns are specified
+copied_df <- final_df
+
+# Create a list to store the plots
+plots <- list()
+
+# Looping through each column to create scatterplots
+for (i in seq_along(c("Population", "Land_Use"))) {
+  col1 <- c("Population", "Land_Use", "Production")[i]
+  
+  # Centering the data by subtracting the year average
+  copied_df <- copied_df %>%
+    group_by(Year) %>%
+    mutate(!!col1 := get(col1) - mean(get(col1), na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Create scatter plot with production
+  p <- ggplot(copied_df, aes_string(x = col1, y = "Production")) +
+    geom_point(alpha = 0.7, color = 'blue') +
+    labs(
+      title = paste("Scatter Plot of", col1, "vs Production"),
+      x = col1,
+      y = "Production"
+    ) +
+    theme_minimal()
+  plots[[i]] <- p
+}
+
+# Arrange and display the plots
+combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
+print(combined_plot)
 ```
