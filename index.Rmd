@@ -30,12 +30,12 @@ xkabledplyhead(rice_prod, title = "Rice Production")
 ```
 
 ```{r}
-#get the shape of dataset
+#display the shape of dataset
 dim(rice_prod)
 ```
 
 ```{r col}
-#get the column names of dataset
+#display the column names of dataset
 colnames(rice_prod)
 ```
 
@@ -85,7 +85,7 @@ for (old_name in colnames(rice_prod)) {
   }
 }
 
-#displaying the changed column names
+#display the changed column names
 colnames(rice_prod)
 ```
 ```{r}
@@ -95,16 +95,21 @@ library(dplyr)
 library(ggplot2)
 library(zoo)
 
-columns_of_interest <- 
-  c("Country","Year","Production","Population","Land_Use")
+columns_of_interest <-
+  c("Country", "Year", "Production", "Population", "Land_Use")
 
 df_filtered <- rice_prod %>%
   select(columns_of_interest)
 
-df_filtered <- df_filtered[df_filtered$Year >= 1980 & df_filtered$Year <= 2020, ]
+#filtering data between 1980 and 2020
+df_filtered <- df_filtered[df_filtered$Year >= 1980 &
+                             df_filtered$Year <= 2020, ]
 
+#displaying the dimension of filtered data
 dim(df_filtered)
+```
 
+```{r}
 #to check the number of missing values for each column
 no_of_na = missing_values <- colSums(is.na(df_filtered))
 no_of_na
@@ -119,58 +124,237 @@ df_cleaned <- df_filtered %>%
 df_cleaned <- df_cleaned %>%
   group_by(Country) %>%
   filter(any(Land_Use > 0)) %>%
-  ungroup() 
+  ungroup()
 
+
+#display the dimension after removing countries with all values as 0 or NA
 dim(df_cleaned)
+
+# Calculate growth rates
+population_data <- df_cleaned %>%
+  mutate(GrowthRate = (Population - lag(Population)) / lag(Population))
+
+#calculating mean growth rate
+average_growth_rate <- mean(population_data$GrowthRate, na.rm = TRUE)
+
+#function to impute data based on calcualted growth rate
+impute_population <- function(data, avg_growth) {
+  for (i in 1:nrow(data)) {
+    if (is.na(data$Population[i])) {
+      previous_population <- data$Population[i - 1]  # Last known population
+      data$Population[i] <- previous_population * (1 + avg_growth)  # Impute using growth rate
+    }
+  }
+  return(data)
+}
+
+# Impute missing values
+population_data <- impute_population(population_data, average_growth_rate)
+
+#group by data to mutate the land_use for specific countries
+population_data <- population_data %>%
+  group_by(Country) %>%
+  mutate(Land_Use = na.approx(Land_Use, na.rm = FALSE)) %>%
+  ungroup()
+
+population_data$Land_Use <- na.approx(population_data$Land_Use)
+
+final_df <- population_data %>%
+  select(columns_of_interest)
+
+final_df <- final_df %>% filter(Country != "Micronesia (FAO)")
+
+colSums(is.na(final_df))
+```
+```{r}
+library(patchwork)
+
+#to see the distrubution of each column
+plots <- list()
+for (col in c("Population", "Production", "Land_Use")) {
+  if (is.numeric(final_df[[col]])) {
+    p <- ggplot(final_df, aes_string(x = col)) +
+      geom_histogram(bins = 30,
+                     color = "black",
+                     fill = "blue") +
+      labs(title = paste("Histogram of ", col),
+           x = col,
+           y = "Count")
+    plots[[col]] <- p
+  }
+}
+combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
+print(combined_plot)
+
+#since each distribution is skewed considering log transformation to improve the symmetry
+
+copied <- final_df
+plots <- list()
+
+for (col in c("Population", "Production", "Land_Use")) {
+  if (is.numeric(copied[[col]])) {
+    # Create a new log-transformed column
+    copied <- copied %>%
+      mutate(!!sym(paste0("log_", col)) := log(copied[[col]] + 1))  # Adding 1 to avoid log(0)
+
+    # Create histogram for the log-transformed variable
+    p <- ggplot(copied, aes_string(x = paste0("log_", col))) +
+      geom_histogram(bins = 30, color = "black", fill = "blue") +
+      labs(title = paste("Histogram of log-transformed", col),
+           x = paste("log(", col,")", sep = ""),
+           y = "Count")
+    
+    plots[[col]] <- p
+  }
+}
+
+# Combine the plots
+combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
+print(combined_plot)
 ```
 ```{r}
 
-ggplot(df_cleaned, aes(Population)) +
-  geom_histogram(color = "#000000", fill = "#0099F8") +
-    labs(title = "Histogram of Population",
-       x = "Population",
-       y = "Count")
+#scatter plot with production vs other parameters colured by country
+# Create a list to store plots
+plots <- list()
 
-# Mean imputation using na.approx
-#df_cleaned["Population"] <- na.approx(df_cleaned["Population"])
-```
-```{r}
+# Loop through each parameter and create a scatter plot
+for (col in c("Population", "Land_Use")) {
+  p <- ggplot(final_df,
+              aes_string(x = "Production", y = col, color = "Country")) +
+    geom_point() +
+    labs(
+      title = paste("Scatter Plot of Production vs", col, "coloured by country"),
+      x = "Production",
+      y = col
+    ) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  plots[[col]] <- p  #Store the plot in the list
+}
 
-ggplot(df_cleaned, aes(x = Year, y = Population)) +
-  geom_line(color = "blue", size = 0.5) +  # Adjust line color and size
-  geom_point(color = "red", size = 1, alpha = 0.7) +
-  labs(title = "Population Over Time", x = "Year", y = "Population") +
-  theme_minimal() +  # Use a minimal theme
-  labs(title = "Time Series with Linear Imputation",  # Add title
-       x = "Time",  # Label for x-axis
-       y = "Values")  # Label for y-axis
+#Combine all plots into a single layout
+combined_plot <- wrap_plots(plots, ncol = 1)  # Adjust ncol for layout
+print(combined_plot)
 
-#Population over time for each country
-ggplot(df_cleaned, aes(x = Year, y = Population, color = Country)) +
-  geom_line(alpha=0.7, size=1) +
-  labs(title = "Population Over Time by Country", x = "Year", y = "Population")+ theme_minimal() +
+#scatter plot with production vs other parameters coloured by year
+#Create a list to store plots
+plots <- list()
+
+# Loop through each parameter and create a scatter plot
+for (col in c("Population", "Land_Use")) {
+  p <- ggplot(final_df, aes_string(x = "Production", y = col, color = "Year")) +
+    geom_point() +
+    labs(
+      title = paste("Scatter Plot of Production vs", col, "coloured by year"),
+      x = "Production",
+      y = col
+    ) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  plots[[col]] <- p  #Store the plot in the list
+}
+
+# Combine all plots into a single layout
+combined_plot <- wrap_plots(plots, ncol = 1)  # Adjust ncol for layout
+print(combined_plot)
+
+#Production over time for each country
+ggplot(final_df, aes(x = Year, y = Production, color = Country)) +
+  geom_line(alpha = 0.7, size = 1) +
+  labs(title = "Production Over Time by Country", x = "Year", y = "Population") + theme_minimal() +
   theme(legend.position = "none")
 
-#total population by year
-total_population <- df_cleaned %>%
+#total production by year
+total_prod <- final_df %>%
   group_by(Year) %>%
-  summarise(total_population = sum(Population))
+  summarise(total_prod = sum(Production))
 
-ggplot(total_population, aes(x = Year, y = total_population)) +
+ggplot(total_prod, aes(x = Year, y = total_prod)) +
   geom_bar(stat = "identity", fill = "skyblue") +
-  labs(title = "Total Population by Year", x = "Year", y = "Total Population") +
+  labs(title = "Total Production by Year", x = "Year", y = "Total Production") +
   theme_minimal()
 
-#population distribution
-ggplot(df_cleaned, aes(x = Population)) +
-  geom_histogram(bins = 30, fill = "lightblue", color = "black") +
-  labs(title = "Distribution of Population", x = "Population", y = "Frequency") +
+#to Calculate the average of it over countries, plot against the years Discuss the trend
+# Grouping by year and applying mean aggregation
+grouped_prod <- final_df %>%
+  group_by(Year) %>%
+  summarize(Production = mean(Production, na.rm = TRUE),
+            .groups = 'drop')
+
+# Plotting a scatterplot with year vs CO2 Emission
+ggplot(grouped_prod, aes(x = Production, y = Year)) +
+  geom_point() +
+  labs(title = 'Production vs Year', x = 'Production', y = 'Year') +
   theme_minimal()
-
-
 ```
 ```{r}
-df_imputed <- df_cleaned %>%
-  group_by(Country) %>%
-  mutate(Population = na.approx(Population, na.rm = FALSE))
+#subtract the average of that column for the country
+# Assuming 'final_df' is your data frame and the columns are specified
+copied_df <- final_df
+
+# Create a list to store the plots
+plots <- list()
+
+# Looping through each column to create scatterplots
+for (i in seq_along(c("Population", "Land_Use"))) {
+  col1 <- c("Population", "Land_Use", "Production")[i]
+  
+  # Centering the data by subtracting the country average
+  copied_df <- copied_df %>%
+    group_by(Country) %>%
+    mutate(!!col1 := get(col1) - mean(get(col1), na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Create scatter plot with production
+  p <- ggplot(copied_df, aes_string(x = col1, y = "Production")) +
+    geom_point(alpha = 0.7, color = 'blue') +
+    labs(
+      title = paste("Scatter Plot of", col1, "vs Production"),
+      x = col1,
+      y = "Production"
+    ) +
+    theme_minimal()
+  plots[[i]] <- p
+}
+
+# Arrange and display the plots
+combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
+print(combined_plot)
+```
+```{r}
+#subtract the average of that column for the year
+# Assuming 'final_df' is your data frame and the columns are specified
+copied_df <- final_df
+
+# Create a list to store the plots
+plots <- list()
+
+# Looping through each column to create scatterplots
+for (i in seq_along(c("Population", "Land_Use"))) {
+  col1 <- c("Population", "Land_Use", "Production")[i]
+  
+  # Centering the data by subtracting the year average
+  copied_df <- copied_df %>%
+    group_by(Year) %>%
+    mutate(!!col1 := get(col1) - mean(get(col1), na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Create scatter plot with production
+  p <- ggplot(copied_df, aes_string(x = col1, y = "Production")) +
+    geom_point(alpha = 0.7, color = 'blue') +
+    labs(
+      title = paste("Scatter Plot of", col1, "vs Production"),
+      x = col1,
+      y = "Production"
+    ) +
+    theme_minimal()
+  plots[[i]] <- p
+}
+
+# Arrange and display the plots
+combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
+print(combined_plot)
 ```
