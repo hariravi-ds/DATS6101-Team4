@@ -358,3 +358,67 @@ for (i in seq_along(c("Population", "Land_Use"))) {
 combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
 print(combined_plot)
 ```
+```{r}
+
+ggplot(final_df, aes(x = Country, y = Production, fill = Country)) +
+  geom_boxplot() +
+  labs(title = "Production by Country", x = "Country", y = "Production") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.position = "none")
+
+#qqplot
+iqr <- IQR(final_df$Production)
+lower_bound <- quantile(final_df$Production, 0.25) - 1.5 * iqr
+upper_bound <- quantile(final_df$Production, 0.75) + 1.5 * iqr
+
+no_outliers <- final_df %>%
+  filter(Production >= lower_bound, Production <= upper_bound)
+
+qqnorm(no_outliers$Production, main="Production QQ Plot")
+qqline(no_outliers$Production, col = "red")
+```
+```{r}
+correlation_result <- cor(final_df$Production, final_df$Population, use = "complete.obs")
+print(correlation_result)
+
+#Compare production across different countries
+anova_res_country <- aov(Production ~ Country, data = final_df)
+summary(anova_res_country)
+
+#Compare production across different year
+anova_res_year <- aov(Production ~ Year, data = final_df)
+summary(anova_res_year)
+```
+```{r}
+# For t-test (if comparing two specific years)
+t_test_result <- t.test(final_df$Production[final_df$Year == 2020], final_df$Production[final_df$Year == 2019])
+print(t_test_result)
+```
+```{r}
+# Create a new variable for high production (e.g., > 25 million tons)
+data <- final_df %>%
+  mutate(high_production = ifelse(Production > 25000000, "Yes", "No"))
+
+# Create a contingency table
+contingency_table <- table(data$Country, data$high_production)
+chi_square_result <- chisq.test(contingency_table)
+print(chi_square_result)
+```
+```{r}
+# Assume data is from before and after COVID-19 (e.g., 2019 vs 2020)
+pre_covid <- data %>% filter(Year == 2019)
+post_covid <- data %>% filter(Year == 2020)
+
+# Independent t-test
+t_test_covid <- t.test(pre_covid$Production, post_covid$Production)
+print(t_test_covid)
+```
+```{r}
+# Assume you want to compare high vs. low land use
+data <- data %>%
+  mutate(land_use_category = ifelse(Land_Use > median(Land_Use), "High", "Low"))
+
+t_test_land_use <- t.test(Production ~ land_use_category, data = data)
+print(t_test_land_use)
+```
