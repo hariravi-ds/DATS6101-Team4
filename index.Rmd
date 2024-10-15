@@ -89,11 +89,11 @@ for (old_name in colnames(rice_prod)) {
 colnames(rice_prod)
 ```
 ```{r}
-#hari
 # Load necessary libraries
 library(dplyr)
 library(ggplot2)
 library(zoo)
+library(stringr)
 
 columns_of_interest <-
   c("Country", "Year", "Production", "Population", "Land_Use")
@@ -105,6 +105,29 @@ df_filtered <- rice_prod %>%
 df_filtered <- df_filtered[df_filtered$Year >= 1980 &
                              df_filtered$Year <= 2020, ]
 
+#categorizing based on countries
+df_filtered <- df_filtered %>%
+  mutate(
+    area_type = case_when(
+      str_detect(Country, "FAO") ~ "Region",
+      str_detect(Country, "(?i)countries") ~ "Region",
+      str_detect(Country, "European Union") ~ "Region",
+      str_detect(Country, "World") ~ "World",
+      Country %in% c(
+        "North America",
+        "South America",
+        "Asia",
+        "Africa",
+        "Europe",
+        "Oceania",
+        "Antarctica"
+      ) ~ "Continent",
+      TRUE ~ "Country"
+    )
+  ) %>%
+  filter(area_type == "Country") %>%
+  select(-area_type)
+
 #displaying the dimension of filtered data
 dim(df_filtered)
 ```
@@ -114,21 +137,43 @@ dim(df_filtered)
 no_of_na = missing_values <- colSums(is.na(df_filtered))
 no_of_na
 
-#removing countries for which all values are NA
+#if all production values is NA, set to 0
 df_cleaned <- df_filtered %>%
-  group_by(Country) %>%
-  filter(any(!is.na(Land_Use))) %>%
-  ungroup()
+  mutate(Production = if_else(
+    Country %in%
+      (
+        df_filtered %>%
+          group_by(Country) %>%
+          summarize(
+            all_zero_or_na = all(is.na(Production) |
+                                   Production == 0),
+            .groups = 'drop'
+          ) %>%
+          filter(all_zero_or_na) %>%
+          pull(Country)
+      ),
+    0,
+    Production
+  ))
 
-#removing countries for which all values are 0
+#if all lan use values is NA, set to 0
 df_cleaned <- df_cleaned %>%
-  group_by(Country) %>%
-  filter(any(Land_Use > 0)) %>%
-  ungroup()
-
-
-#display the dimension after removing countries with all values as 0 or NA
-dim(df_cleaned)
+  mutate(Land_Use = if_else(
+    Country %in%
+      (
+        df_filtered %>%
+          group_by(Country) %>%
+          summarize(
+            all_zero_or_na = all(is.na(Land_Use) |
+                                   Land_Use == 0),
+            .groups = 'drop'
+          ) %>%
+          filter(all_zero_or_na) %>%
+          pull(Country)
+      ),
+    0,
+    Land_Use
+  ))
 
 # Calculate growth rates
 population_data <- df_cleaned %>%
@@ -162,9 +207,8 @@ population_data$Land_Use <- na.approx(population_data$Land_Use)
 final_df <- population_data %>%
   select(columns_of_interest)
 
-final_df <- final_df %>% filter(Country != "Micronesia (FAO)")
-
 colSums(is.na(final_df))
+dim(final_df)
 ```
 ```{r}
 library(patchwork)
@@ -187,7 +231,6 @@ combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
 print(combined_plot)
 
 #since each distribution is skewed considering log transformation to improve the symmetry
-
 copied <- final_df
 plots <- list()
 
@@ -196,13 +239,17 @@ for (col in c("Population", "Production", "Land_Use")) {
     # Create a new log-transformed column
     copied <- copied %>%
       mutate(!!sym(paste0("log_", col)) := log(copied[[col]] + 1))  # Adding 1 to avoid log(0)
-
+    
     # Create histogram for the log-transformed variable
     p <- ggplot(copied, aes_string(x = paste0("log_", col))) +
-      geom_histogram(bins = 30, color = "black", fill = "blue") +
-      labs(title = paste("Histogram of log-transformed", col),
-           x = paste("log(", col,")", sep = ""),
-           y = "Count")
+      geom_histogram(bins = 10,
+                     color = "black",
+                     fill = "blue") +
+      labs(
+        title = paste("Histogram of log-transformed", col),
+        x = paste("log(", col, ")", sep = ""),
+        y = "Count"
+      )
     
     plots[[col]] <- p
   }
@@ -213,7 +260,6 @@ combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
 print(combined_plot)
 ```
 ```{r}
-
 #scatter plot with production vs other parameters colured by country
 # Create a list to store plots
 plots <- list()
@@ -273,7 +319,7 @@ total_prod <- final_df %>%
   summarise(total_prod = sum(Production))
 
 ggplot(total_prod, aes(x = Year, y = total_prod)) +
-  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_bar(stat = "identity", fill = "blue") +
   labs(title = "Total Production by Year", x = "Year", y = "Total Production") +
   theme_minimal()
 
@@ -359,7 +405,6 @@ combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
 print(combined_plot)
 ```
 ```{r}
-
 ggplot(final_df, aes(x = Country, y = Production, fill = Country)) +
   geom_boxplot() +
   labs(title = "Production by Country", x = "Country", y = "Production") +
@@ -375,7 +420,7 @@ upper_bound <- quantile(final_df$Production, 0.75) + 1.5 * iqr
 no_outliers <- final_df %>%
   filter(Production >= lower_bound, Production <= upper_bound)
 
-qqnorm(no_outliers$Production, main="Production QQ Plot")
+qqnorm(no_outliers$Production, main = "Production QQ Plot")
 qqline(no_outliers$Production, col = "red")
 ```
 ```{r}
