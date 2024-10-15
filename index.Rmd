@@ -212,6 +212,11 @@ dim(final_df)
 ```
 ```{r}
 library(patchwork)
+library(corrplot)
+
+# Correlation matrix with heatmap
+cor_matrix <- cor(final_df[, c("Production", "Population", "Land_Use")], use = "complete.obs")
+corrplot(cor_matrix, method = "color", addCoef.col = "black")
 
 #to see the distrubution of each column
 plots <- list()
@@ -424,9 +429,6 @@ qqnorm(no_outliers$Production, main = "Production QQ Plot")
 qqline(no_outliers$Production, col = "red")
 ```
 ```{r}
-correlation_result <- cor(final_df$Production, final_df$Population, use = "complete.obs")
-print(correlation_result)
-
 #Compare production across different countries
 anova_res_country <- aov(Production ~ Country, data = final_df)
 summary(anova_res_country)
@@ -436,19 +438,40 @@ anova_res_year <- aov(Production ~ Year, data = final_df)
 summary(anova_res_year)
 ```
 ```{r}
-# For t-test (if comparing two specific years)
-t_test_result <- t.test(final_df$Production[final_df$Year == 2020], final_df$Production[final_df$Year == 2019])
-print(t_test_result)
-```
-```{r}
 # Create a new variable for high production (e.g., > 25 million tons)
+#Is there a significant association between the country of origin and high rice production levels?
+#null: There is no association between the country and high rice production (the distribution of high production is the same across all countries).
 data <- final_df %>%
   mutate(high_production = ifelse(Production > 25000000, "Yes", "No"))
+#A p-value of p < 2.2e-16 from the Chi-Square test indicates a very strong statistical significance in the relationship between the country of origin and high rice production levels. This means that the null hypothesis can be rejected that there is no association between the two categorical variables.
 
 # Create a contingency table
 contingency_table <- table(data$Country, data$high_production)
 chi_square_result <- chisq.test(contingency_table)
 print(chi_square_result)
+
+# Calculate proportions of high production for each country
+country_proportions <- as.data.frame(contingency_table) %>%
+  group_by(Var1) %>%  # Var1 corresponds to Country
+  summarize(High_Production_Proportion = sum(Freq[Var2 == "Yes"]) / sum(Freq)) %>%
+  arrange(desc(High_Production_Proportion))
+
+# Rename the columns for clarity
+colnames(country_proportions) <- c("Country", "High_Production_Proportion")
+
+# Display the results
+print(country_proportions)
+
+# Bar plot of high production proportions by country
+ggplot(country_proportions,
+       aes(
+         x = reorder(Country, High_Production_Proportion),
+         y = High_Production_Proportion
+       )) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates for better readability
+  labs(title = "Proportion of High Rice Production by Country", x = "Country", y = "Proportion of High Production") +
+  theme_minimal()
 ```
 ```{r}
 # Assume data is from before and after COVID-19 (e.g., 2019 vs 2020)
@@ -466,4 +489,107 @@ data <- data %>%
 
 t_test_land_use <- t.test(Production ~ land_use_category, data = data)
 print(t_test_land_use)
+```
+```{r}
+# Calculate the top quartile for production in the last five years
+last_five_years <- c(2020, 2019, 2018, 2017, 2016)
+
+# Filter data for the last five years
+filtered_data <- data %>%
+  filter(Year %in% last_five_years)
+
+filtered_data <- filtered_data %>%
+  mutate(High_Producer = ifelse(Production > 25000000, "Yes", "No"))
+
+# Count the number of years each country produced over 25 million tons
+consistent_production_counts <- filtered_data %>%
+  mutate(High_Production = ifelse(Production > 25000000, 1, 0)) %>%  # Create a binary indicator
+  group_by(Country) %>%
+  summarize(Consistent_Production_Years = sum(High_Production)) %>%  # Count the number of high production years
+  filter(Consistent_Production_Years == 5)  # Keep only those with 5 years of high production
+
+# Calculate the production threshold for the top quartile over the last five years
+top_quartile_threshold <- filtered_data %>%
+  summarize(Top_Quartile = quantile(Production, 0.75)) %>%
+  pull(Top_Quartile)
+
+# Filter the countries that are in the top quartile and have consistent production
+top_quartile_countries <- consistent_production_counts %>%
+  inner_join(filtered_data %>%
+               group_by(Country) %>%
+               summarize(Average_Production = mean(Production)),
+             by = "Country") %>%
+  filter(Average_Production >= top_quartile_threshold)
+
+# Calculate improvement over the last five years for these countries
+improvement_data <- filtered_data %>%
+  filter(Country %in% top_quartile_countries$Country) %>%
+  group_by(Country) %>%
+  summarize(Improvement = last(Production) - first(Production)) %>%
+  arrange(desc(Improvement))
+
+# Get the countries with the most improvement
+most_improved_country <- improvement_data %>%
+  filter(Improvement == max(Improvement))  # Identify the country with the most improvement
+
+# Print results
+cat("Countries consistently producing over 25 million tons in the last five years:\n")
+print(top_quartile_countries)
+
+cat("\nCountries showing the most improvement in production:\n")
+print(most_improved_country)
+
+# Perform the t-test
+t_test_result <- t.test(Production ~ High_Producer, data = filtered_data)
+
+# Print the results of the t-test
+print(t_test_result)
+#There is a significant difference in average rice production between high producers and low producers.
+
+ggplot(filtered_data, aes(x = Year, y = Production, group = Country, color = Country)) +
+  geom_line() +
+  labs(title = "Rice Production Over the Last Five Years",
+       x = "Year", y = "Production (in tons)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Categorize countries based on consistent high production
+recent_data <- recent_data %>%
+  mutate(High_Producer = ifelse(Country %in% high_producers$Country, "Consistent High Producer", "Others"))
+
+#Scatter Plot to examine any relationships between production and other factors, such as land use or population.
+ggplot(filtered_data, aes(x = Population, y = Production, color = High_Producer)) +
+  geom_point(size = 3) +
+  labs(title = "Production vs Population",
+       x = "Population", y = "Production (in tons)") +
+  theme_minimal()
+
+# Calculate improvement over the five years
+improvement_data <- filtered_data %>%
+  group_by(Country) %>%
+  summarize(Improvement = last(Production) - first(Production)) %>%
+  arrange(desc(Improvement))
+
+print(improvement_data)
+
+# Visualize the improvement
+ggplot(improvement_data, aes(x = reorder(Country, Improvement), y = Improvement, fill = Improvement > 0)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Improvement in Rice Production Over the Last Five Years",
+       x = "Country", y = "Change in Production (in tons)") +
+  theme_minimal()
+
+# Create a summary of average production by category
+avg_production <- filtered_data %>%
+  group_by(High_Producer) %>%
+  summarize(Average_Production = mean(Production, na.rm = TRUE))
+
+# Bar plot comparing average production of consistent high producers vs others
+ggplot(avg_production, aes(x = High_Producer, y = Average_Production, fill = High_Producer)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  labs(title = "Average Rice Production: Consistent High Producers vs Others",
+       x = "Category", y = "Average Production (in tons)") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Consistent High Producer" = "blue", "Others" = "red"))
 ```
