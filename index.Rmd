@@ -23,10 +23,11 @@ library(ezids)
 #load the dataset
 rice_prod <- read.csv("C:/Users/HARI/Documents/DATS6101-Team4/Rice Production Data.csv")
 
-#display top six rows of the dataset
-head(rice_prod)
-
+#display top rows of the dataset
 xkabledplyhead(rice_prod, title = "Rice Production")
+
+#summary of the dataset
+summary(rice_prod)
 ```
 
 ```{r}
@@ -134,9 +135,10 @@ dim(df_filtered)
 
 ```{r}
 #to check the number of missing values for each column
-no_of_na = missing_values <- colSums(is.na(df_filtered))
-no_of_na
-
+missing_values <- colSums(is.na(df_filtered))
+missing_values
+```
+```{r}
 #if all production values is NA, set to 0
 df_cleaned <- df_filtered %>%
   mutate(Production = if_else(
@@ -156,7 +158,7 @@ df_cleaned <- df_filtered %>%
     Production
   ))
 
-#if all lan use values is NA, set to 0
+#if all land use values is NA, set to 0
 df_cleaned <- df_cleaned %>%
   mutate(Land_Use = if_else(
     Country %in%
@@ -202,13 +204,13 @@ population_data <- population_data %>%
   mutate(Land_Use = na.approx(Land_Use, na.rm = FALSE)) %>%
   ungroup()
 
+#fill in missing values in the Land_Use column using interpolation
 population_data$Land_Use <- na.approx(population_data$Land_Use)
 
 final_df <- population_data %>%
   select(columns_of_interest)
 
 colSums(is.na(final_df))
-dim(final_df)
 ```
 ```{r}
 library(patchwork)
@@ -218,7 +220,7 @@ library(corrplot)
 cor_matrix <- cor(final_df[, c("Production", "Population", "Land_Use")], use = "complete.obs")
 corrplot(cor_matrix, method = "color", addCoef.col = "black")
 
-#to see the distrubution of each column
+#to see the distribution of each column
 plots <- list()
 for (col in c("Population", "Production", "Land_Use")) {
   if (is.numeric(final_df[[col]])) {
@@ -232,29 +234,33 @@ for (col in c("Population", "Production", "Land_Use")) {
     plots[[col]] <- p
   }
 }
-combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
+combined_plot <- wrap_plots(plots, ncol = 2)
 print(combined_plot)
 
-#since each distribution is skewed considering log transformation to improve the symmetry
+#since each distribution is skewed performing log transformation to improve the symmetry
 copied <- final_df
 plots <- list()
 
 for (col in c("Population", "Production", "Land_Use")) {
   if (is.numeric(copied[[col]])) {
+    # Filter out non-positive values
+    filtered_data <- copied %>% filter(!!sym(col) > 0)
+    
     # Create a new log-transformed column
-    copied <- copied %>%
-      mutate(!!sym(paste0("log_", col)) := log(copied[[col]] + 1))  # Adding 1 to avoid log(0)
+    filtered_data <- filtered_data %>%
+      mutate(!!sym(paste0("log_", col)) := log(!!sym(col)))
     
     # Create histogram for the log-transformed variable
-    p <- ggplot(copied, aes_string(x = paste0("log_", col))) +
+    p <- ggplot(filtered_data, aes_string(x = paste0("log_", col))) +
       geom_histogram(bins = 10,
                      color = "black",
                      fill = "blue") +
       labs(
         title = paste("Histogram of log-transformed", col),
-        x = paste("log(", col, ")", sep = ""),
+        x = paste("log-transformed ", col, sep = ""),
         y = "Count"
-      )
+      ) +
+      theme(plot.title = element_text(size = 12))
     
     plots[[col]] <- p
   }
@@ -553,8 +559,14 @@ ggplot(filtered_data, aes(x = Year, y = Production, group = Country, color = Cou
   theme_minimal() +
   theme(legend.position = "none")
 
+high_producers <- filtered_data %>%
+  mutate(High_Producer = ifelse(Production > 25000000, "Yes", "No")) %>%
+  group_by(Country) %>%
+  summarize(Consistently_High = sum(High_Producer == "Yes") == 5) %>%
+  filter(Consistently_High == TRUE)
+
 # Categorize countries based on consistent high production
-recent_data <- recent_data %>%
+filtered_data <- filtered_data %>%
   mutate(High_Producer = ifelse(Country %in% high_producers$Country, "Consistent High Producer", "Others"))
 
 #Scatter Plot to examine any relationships between production and other factors, such as land use or population.
