@@ -18,6 +18,8 @@ output:
 ```{r lib}
 library(ezids)
 library(dplyr)
+library(ggplot2)
+library(zoo)
 ```
 
 ```{r pi}
@@ -43,22 +45,22 @@ name_map <- c(
   "Exports..t." = "Exports(t)",
   "exports__tonnes__per_capita" = "Exports(t_per_capita)",
   "Exports.per.capita..kg." = "Exports_per_capita(kg)",
-  "Domestic.supply..t." = "Domestic_Supply(t)",
+  "Domestic.supply..t." = "Domestic_Supply_t",
   "domestic_supply__tonnes__per_capita" = "Domestic_Supply(t_per_capita)",
-  "Domestic.supply.per.capita..kg." = "Domestic_Supply_per_kg",
+  "Domestic.supply.per.capita..kg." = "Domestic_Supply_per_Capita(kg)",
   "Food..t." = "Food(t)",
   "food__tonnes__per_capita" = "Food(t_per_capita)",
-  "Food.per.capita..kg." = "Food_Supply_kg",
+  "Food.per.capita..kg." = "Food_per_Capita(kg)",
   "Animal.feed..t." = "Animal_Feed(t)",
   "feed__tonnes__per_capita" = "Animal_Feed(t_per_capita)",
   "Animal.feed.per.capita..kg." = "Animal_Feed_per_Capita(kg)",
   "Other.uses..t." = "Other_Uses(t)",
   "other_uses__tonnes__per_capita" = "Other_Uses(t_per_capita)",
   "Other.uses.per.capita..kg." = "Other_uses_per_capita(kg)",
-  "Supply.chain.waste..t." = "Supply_Chain_Waste(t)",
+  "Supply.chain.waste..t." = "Supply_Chain_Waste_t",
   "waste_in_supply_chain__tonnes__per_capita" = "Waste_in_supply_chain(t_per_capita)",
-  "Supply.chain.waste.per.capita..kg." = "Supply_chain_waste_per_kg",
-  "Food.supply..kg.per.capita.per.year." = "Food_supply_kg_per_capita_per_day",
+  "Supply.chain.waste.per.capita..kg." = "Supply_chain_waste_per_Capita(kg)",
+  "Food.supply..kg.per.capita.per.year." = "Food_supply(kg_per_capita_per_day)",
   "Food.supply..g.per.capita.per.day." = "Food_supply(g_per_capita_per_day)",
   "Food.supply..kcal.per.capita.per.day." = "Food_supply(kcal_per_capita_per_day)",
   "Food.supply..Protein.g.per.capita.per.day." = "Food_supply(Protein_per_capita_per_day)",
@@ -75,22 +77,12 @@ for (old_name in colnames(rice_prod)) {
 #display the changed column names
 colnames(rice_prod)
 ```
-```{r supply}
-# Load necessary libraries
-library(dplyr)
-library(ggplot2)
-library(zoo)
-library(dplyr)
-
-colnames(rice_prod)[colnames(rice_prod) == "Supply_chain_waste_per_Capita(kg)"] <- "Supply_chain_waste_kg"
-colnames(rice_prod)[colnames(rice_prod) == "Food_supply(kg_per_capita_per_day)"] <- "Food_supply_kg_per_day"
-colnames(rice_prod)[colnames(rice_prod) == "Domestic_Supply_per_Capita(kg)"] <- "Domestic_supply_kg"
+```{r filtered}
 
 columns <-
-  c("Country", "Year","Supply_chain_waste_per_kg","Food_supply_kg_per_capita_per_day","Domestic_Supply_per_kg")
+  c("Country", "Year","Production","Domestic_Supply_t","Food(t)","Supply_Chain_Waste_t")
 
-fil_data <- rice_prod %>%
-  select(all_of(columns))
+fil_data <- rice_prod %>% select((columns))
 
 #filtering data between 1980 and 2020
 fil_data <- fil_data[fil_data$Year >= 1980 &
@@ -99,220 +91,202 @@ fil_data <- fil_data[fil_data$Year >= 1980 &
 #displaying the dimension of filtered data
 dim(fil_data)
 colnames(fil_data)
+
 ```
 
-
-```{r}
+```{r null}
 #to check the number of missing values for each column
 na_val = missing_values <- colSums(is.na(fil_data))
 na_val
+dim(fil_data)
+```
+```{r clean}
+cleaned_data <- na.omit(fil_data)
+
+dim(cleaned_data)
+colnames(cleaned_data)
 ```
 
 
+```{r desc}
 
-```{r fil}
-agri_data <- fil_data %>%
-  group_by(Country) %>%
-  filter(any(!is.na(`Supply_chain_waste_per_kg`)) | 
-           any(!is.na(`Food_supply_kg_per_capita_per_day`)) | 
-           any(!is.na(`Domestic_Supply_per_kg`))) %>%
-  ungroup()
-agri_data
-dim(agri_data)
+# Initialize a list to store results
+descriptive_stats <- list()
+
+# Count of unique countries
+descriptive_stats$Country_Count <- n_distinct(cleaned_data$Country)
+
+# Year statistics
+descriptive_stats$Year_Min <- min(cleaned_data$Year, na.rm = TRUE)
+descriptive_stats$Year_Max <- max(cleaned_data$Year, na.rm = TRUE)
+
+# Production statistics
+descriptive_stats$Production_Mean <- mean(cleaned_data$Production, na.rm = TRUE)
+descriptive_stats$Production_SD <- sd(cleaned_data$Production, na.rm = TRUE)
+descriptive_stats$Production_Median <- median(cleaned_data$Production, na.rm = TRUE)
+descriptive_stats$Production_Min <- min(cleaned_data$Production, na.rm = TRUE)
+descriptive_stats$Production_Max <- max(cleaned_data$Production, na.rm = TRUE)
+
+# Domestic Supply statistics
+descriptive_stats$Domestic_Supply_t_Mean <- mean(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
+descriptive_stats$Domestic_Supply_t_SD <- sd(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
+descriptive_stats$Domestic_Supply_t_Median <- median(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
+descriptive_stats$Domestic_Supply_t_Min <- min(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
+descriptive_stats$Domestic_Supply_t_Max <- max(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
+
+# Food(t) statistics
+descriptive_stats$Food_t_Mean <- mean(cleaned_data$`Food(t)`, na.rm = TRUE)
+descriptive_stats$Food_t_SD <- sd(cleaned_data$`Food(t)`, na.rm = TRUE)
+descriptive_stats$Food_t_Median <- median(cleaned_data$`Food(t)`, na.rm = TRUE)
+descriptive_stats$Food_t_Min <- min(cleaned_data$`Food(t)`, na.rm = TRUE)
+descriptive_stats$Food_t_Max <- max(cleaned_data$`Food(t)`, na.rm = TRUE)
+
+# Supply Chain Waste statistics
+descriptive_stats$Supply_Chain_Waste_t_Mean <- mean(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
+descriptive_stats$Supply_Chain_Waste_t_SD <- sd(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
+descriptive_stats$Supply_Chain_Waste_t_Median <- median(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
+descriptive_stats$Supply_Chain_Waste_t_Min <- min(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
+descriptive_stats$Supply_Chain_Waste_t_Max <- max(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
+
+# Convert the list to a data frame for better display
+descriptive_stats_df <- as.data.frame(do.call(rbind, descriptive_stats))
+
+# View the descriptive statistics
+print(descriptive_stats_df)
+
+
 ```
-```{r sum}
 
+```{r domestic }
+#ANOVA test to Analyzing Domestic Supply by Year
+aov_result <- aov(Domestic_Supply_t ~ Year, data = cleaned_data)
+summary(aov_result)
 
-#Calculate mean, median, and standard deviation for specified parameters
-summary_stats <- agri_data %>%
-  summarize(
-    Mean_Food_Supply = mean(Food_supply_kg_per_capita_per_day, na.rm = TRUE),
-    Median_Food_Supply = median(Food_supply_kg_per_capita_per_day, na.rm = TRUE),
-    SD_Food_Supply = sd(Food_supply_kg_per_capita_per_day, na.rm = TRUE),
-    
-    Mean_Waste = mean(Supply_chain_waste_per_kg, na.rm = TRUE),
-    Median_Waste = median(Supply_chain_waste_per_kg, na.rm = TRUE),
-    SD_Waste = sd(Supply_chain_waste_per_kg, na.rm = TRUE),
-    
-    Mean_Domestic_Supply = mean(Domestic_Supply_per_kg, na.rm = TRUE),
-    Median_Domestic_Supply = median(Domestic_Supply_per_kg, na.rm = TRUE),
-    SD_Domestic_Supply = sd(Domestic_Supply_per_kg, na.rm = TRUE)
-  )
-
-# Print summary statistics
-print(summary_stats)
-```
-```{r trend}
-#  Analyze trends over time 
-trend_data <- agri_data %>%
+mean_supply_by_year <- cleaned_data %>%
   group_by(Year) %>%
-  summarize(
-    Avg_Food_Supply = mean(Food_supply_kg_per_capita_per_day, na.rm = TRUE),
-    Avg_Waste = mean(Supply_chain_waste_per_kg, na.rm = TRUE),
-    Avg_Domestic_Supply = mean(Domestic_Supply_per_kg, na.rm = TRUE)
-  )
+  summarise(Mean_Domestic_Supply = mean(Domestic_Supply_t, na.rm = TRUE))
 
-# Plot trends over time
-# Food Supply Trend
-ggplot(trend_data, aes(x = Year)) +
-  geom_line(aes(y = Avg_Food_Supply, color = "Food Supply"), size = 1) +
-  geom_line(aes(y = Avg_Waste, color = "Waste"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = Avg_Domestic_Supply, color = "Domestic Supply"), size = 1, linetype = "dotted") +
-  labs(title = "Trends Over Time",
+# Line graph for Domestic Supply by Year
+ggplot(mean_supply_by_year, aes(x = Year, y = Mean_Domestic_Supply)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 2) +  # Add points for clarity
+  labs(title = "Mean Domestic Supply by Year",
        x = "Year",
-       y = "Average (kg per capita per day)",
-       color = "Legend") +
+       y = "Mean Domestic Supply (t)") +
   theme_minimal()
 
-# Display the plot
 ```
 
-```{r str}
-str(agri_data)
+```{r food_supply}
+aov_result <- aov(`Food(t)` ~ Country, data = cleaned_data)
+summary(aov_result)
 
-```
-```{r com}
-comparison_data <- agri_data %>%
-  group_by(Country) %>%
-  summarize(
-    Avg_Food_Supply = mean(Food_supply_kg_per_capita_per_day, na.rm = TRUE),
-    Avg_Waste = mean(Supply_chain_waste_per_kg, na.rm = TRUE)
-  )
-
-``` 
-```{r bar1}
-ggplot(comparison_data, aes(x = reorder(Country, -Avg_Food_Supply), y = Avg_Food_Supply)) +
-  geom_bar(stat = "identity", fill = "steelblue") +
-  geom_bar(aes(y = Avg_Waste), stat = "identity", fill = "red", alpha = 0.5) +
-  labs(title = "Average Food Supply and Waste Per Capita by Country",
-       x = "Country",
-       y = "Average (kg per capita)",
-       fill = "Legend") +
-  theme_minimal() +
-  scale_y_continuous(sec.axis = sec_axis(~ ., name = "Waste (kg per capita)")) +
-  theme(axis.text.x = element_text(angle =45, hjust = 1.2))
-```
-
-```{r Analysis}
-# Analyze Domestic Supply Variation Between Developed and Developing Countries
-
-# Define developed and developing countries 
-developed_countries <- c("United States", "Canada", "India", "United Kingdom", "France","Germany")  
-agri_data <- agri_data %>%
-  mutate(Development_Status = ifelse(Country %in% developed_countries, "Developed", "Developing"))
-
-# Summarize domestic supply by development status
-domestic_supply_comparison <- agri_data %>%
-  group_by(Development_Status) %>%
-  summarize(Avg_Domestic_Supply = mean(Domestic_Supply_per_kg, na.rm = TRUE))
-
-# Create a bar plot for domestic supply comparison
-ggplot(domestic_supply_comparison, aes(x = Development_Status, y = Avg_Domestic_Supply, fill = Development_Status)) +
-  geom_bar(stat = "identity") +
-  labs(title = "Average Domestic Supply Per Capita by Development Status",
-       x = "Development Status",
-       y = "Average Domestic Supply (kg per capita)") +
-  theme_minimal()
-
-# Display the plots
-print(comparison_data)
-print(domestic_supply_comparison)
-```
-
-```{r diff_plot}
-# Load necessary libraries
-
-
-# Step 1: Define developed countries
-developed_countries <- c("USA", "Canada", "Germany", "UK", "France")  # Add more as needed
-
-# Step 2: Filter the dataset for developed countries
-developed_data <- agri_data %>%
-  filter(Country %in% developed_countries)
-
-# Step 3: Create a plot for each developed country
-ggplot(developed_data, aes(x = Year)) +
-  geom_line(aes(y = Food_supply_kg_per_capita_per_day, color = "Food Supply"), size = 1) +
-  geom_line(aes(y = Supply_chain_waste_per_kg, color = "Waste"), size = 1, linetype = "dashed") +
-  labs(title = "Food Supply and Waste Per Capita Over Time for Developed Countries",
-       x = "Year",
-       y = "Kg per Capita",
-       color = "Legend") +
-  facet_wrap(~ Country) +  # Create separate plots for each country
-  theme_minimal() +
-  theme(legend.position = "bottom")
-
-# Display the plot
-
-
-```
-
-```{r hist}
-# Load necessary libraries
-library(dplyr)
+# Load necessary packages
 library(ggplot2)
+library(dplyr)
 
-# Sample data (replace this with your actual data)
-# agriculture_data <- read.csv("path_to_your_data.csv")
+# Define the time periods
+periods <- list(
+  `1980-1990` = cleaned_data %>% filter(Year >= 1980 & Year < 1991),
+  `1991-2000` = cleaned_data %>% filter(Year >= 1991 & Year < 2001),
+  `2001-2009` = cleaned_data %>% filter(Year >= 2001 & Year < 2010),
+  `2009-2020` = cleaned_data %>% filter(Year >= 2009 & Year <= 2020)
+)
 
-# Step 1: Define developed countries
-developed_countries <- c("USA", "Canada", "Germany", "UK", "France")  # Add more as needed
+# Create a list to store plots
+plots <- list()
 
-# Step 2: Filter the dataset for developed countries
-developed_data <- agri_data %>%
-  filter(Country %in% developed_countries)
+# Loop through the periods and create plots
+for (period in names(periods)) {
+  mean_food_supply <- periods[[period]] %>%
+    group_by(Country) %>%
+    summarise(Mean_Food_Supply = mean(`Food(t)`, na.rm = TRUE))
 
-# Create histograms for Food Supply and Waste Per Capita
-# Food Supply Histogram
-food_supply_hist <-ggplot(developed_data, aes(x = Food_supply_kg_per_capita_per_day, fill = Country)) +
-  geom_histogram(binwidth = 10, position = "dodge", color = "black") +
-  labs(title = "Histogram of Food Supply Per Capita for Developed Countries",
-       x = "Food Supply (kg per capita)",
-       y = "Frequency") +
-  theme_minimal() +
-  theme(legend.position = "bottom")
+  p <- ggplot(mean_food_supply, aes(x = reorder(Country, -Mean_Food_Supply), y = Mean_Food_Supply)) +
+    geom_bar(stat = "identity", fill = "skyblue") +
+    labs(title = paste("Mean Food Supply by Country (", period, ")", sep = ""),
+         x = "Country",
+         y = "Mean Food Supply (t)") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  plots[[period]] <- p
+}
 
-# Waste Per Capita Histogram
-waste_hist <-ggplot(developed_data, aes(x = Supply_chain_waste_per_kg, fill = Country)) +
-  geom_histogram(binwidth = 1, position = "dodge", color = "black") +
-  labs(title = "Histogram of Supply Chain Waste Per Capita for Developed Countries",
-       x = "Waste (kg per capita)",
-       y = "Frequency") +
-  theme_minimal() +
-  theme(legend.position = "bottom")
+# Print the plots
+for (p in plots) {
+  print(p)
+}
 
-# Display the plots
 
 ```
 
-```{r corr}
-install.packages("ggcorrplot")
+```{r supply}
+aov_result <- aov(Supply_Chain_Waste_t ~ Year, data = cleaned_data)
+summary(aov_result)
+
+mean_waste_by_year <- cleaned_data %>%
+  group_by(Year) %>%
+  summarise(Mean_Supply_Chain_Waste = mean(Supply_Chain_Waste_t, na.rm = TRUE))
+
+# Line plot for Supply Chain Waste by Year
+ggplot(mean_waste_by_year, aes(x = Year, y = Mean_Supply_Chain_Waste)) +
+  geom_line(color = "blue", size = 1) +  # Line
+  geom_point(color = "red", size = 2) +  # Points for clarity
+  labs(title = "Mean Supply Chain Waste by Year",
+       x = "Year",
+       y = "Mean Supply Chain Waste (t)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
+
+```{r food _waste}
+# Assuming cleaned_data already contains the relevant columns
+# Assuming cleaned_data already contains the relevant columns
+cleaned_data <- cleaned_data %>%
+  mutate(Food_Waste = Production - Domestic_Supply_t - Supply_Chain_Waste_t)
+
+# View the updated dataset with Food Waste
+head(cleaned_data)
+
+
+
+```
+
+
+```{r corr }
 
 library(reshape2)
-library(ggcorrplot)
-
-
-#Select relevant columns for correlation analysis
-correlation_data <- agri_data %>%
-  select(Food_supply_kg_per_capita_per_day, Supply_chain_waste_per_kg,Domestic_Supply_per_kg)
-
 # Calculate the correlation matrix
-correlation_matrix <- cor(correlation_data, use = "complete.obs")
+cor_matrix <- cleaned_data %>%
+  select(Production, Domestic_Supply_t, Food_Waste, Supply_Chain_Waste_t) %>%
+  cor(use = "complete.obs")
 
-# Convert the correlation matrix to a long format for ggplot
-correlation_melted <- melt(correlation_matrix)
+# Reshape the correlation matrix for ggplot
+cor_melted <- melt(cor_matrix)
 
-# Create a heatmap using ggcorrplot
-ggcorrplot(correlation_matrix, 
-           method = "circle", 
-           type = "lower", 
-           lab = TRUE, 
-           lab_size = 3, 
-           colors = c("blue", "white", "red"), 
-           title = "Correlation Matrix Heatmap",
-           ggtheme = theme_minimal())
+# Create the heat map
+ggplot(data = cor_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +  # Create the tiles
+  scale_fill_gradient2(low = "aquamarine2", high = "skyblue", mid = "white", 
+                       midpoint = 0, limit = c(-1, 1), 
+                       name = "Correlation") +
+  labs(title = "Correlation Heat Map",
+       x = "Variables",
+       y = "Variables") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# Display the correlation matrix
-print(correlation_matrix)
 
 ```
+
+
+
+
+
+
+
+
+
+
