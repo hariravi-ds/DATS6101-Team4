@@ -148,11 +148,11 @@ xkablesummary(rice_trade_country)
 rice_trade %>%
   filter(Country == "World") %>%
   ggplot(aes(x = Year)) +
-  geom_line(aes(y = `Imports(t)`), color = "steelblue") +
-  geom_line(aes(y = `Exports(t)`), color = "darkred") +
-  labs(title = "Global Rice Import (Blue) vs Export (Red) Over Time",
-       x = "Year",
-       y = "Amount (tons)") +
+  geom_line(aes(y = `Imports(t)`), color = "steelblue", size = 1) +
+  geom_line(aes(y = `Exports(t)`), color = "darkred",
+            size = 1) +
+  labs(x = "Year",
+       y = "Amount (t)") +
   theme_minimal() +
   scale_y_continuous(labels = scales::comma)  # Handle large exponential values in y-axis
 ```
@@ -194,8 +194,7 @@ top_rice_trade %>%
   ggplot(aes(x = reorder(Country,`Imports(t)`), y = `Imports(t)`)) +
   geom_bar(stat = "identity", fill = "steelblue") +
   coord_flip() +
-  labs(title = "Top 5 Importers Since 1980",
-       x = "Country",
+  labs(x = "Country",
        y = "Imports (t)") +
   theme_minimal() +
   scale_y_continuous(labels = scales::comma)
@@ -204,10 +203,9 @@ top_rice_trade %>%
 top_rice_trade %>%
   filter(Country %in% top_5_exporters) %>%
   ggplot(aes(x = reorder(Country, `Exports(t)`), y = `Exports(t)`)) +
-  geom_bar(stat = "identity", fill = "darkgreen") +
+  geom_bar(stat = "identity", fill = "darkred") +
   coord_flip() +
-  labs(title = "Top 5 Importers Since 1980",
-       x = "Country",
+  labs(x = "Country",
        y = "Exports (t)") +
   theme_minimal() +
   scale_y_continuous(labels = scales::comma)
@@ -218,25 +216,23 @@ top_rice_trade %>%
 top_rice_trade %>%
   filter(Country %in% top_5_importers) %>%
   ggplot(aes(x = Year, y = `Imports(t)`, color = Country)) +
-  geom_line() +
-  labs(title = "Import Trends Over Time for Top 5 Importers",
-       x = "Country",
+  geom_line(size = 1) +
+  labs(x = "Country",
        y = "Imports (t)") +
   theme_minimal() +
   scale_y_continuous(labels = scales::comma) +
-  scale_color_manual(values = c("blue", "orange", "magenta", "yellow", "green"))
+  scale_color_manual(values = c("steelblue", "orange", "magenta", "skyblue", "green"))
 
 # Line graph for exports over time for top 5 exporters
 top_rice_trade %>%
   filter(Country %in% top_5_exporters) %>%
   ggplot(aes(x = Year, y = `Exports(t)`, color = Country)) +
-  geom_line() +
-  labs(title = "Export Trends Over Time for Top 5 Exporters",
-       x = "Country",
+  geom_line(size = 1) +
+  labs(x = "Country",
        y = "Exports (t)") +
   theme_minimal() +
   scale_y_continuous(labels = scales::comma) +
-  scale_color_manual(values = c("blue", "orange", "magenta", "yellow", "green"))
+  scale_color_manual(values = c("darkred", "orange", "magenta", "skyblue", "green"))
 ```
 
 
@@ -252,7 +248,8 @@ cleaned_net_trade <- net_trade %>%
          `Imports(t_per_capita)` =
            replace_na(`Imports(t_per_capita)`, 0),
          `Exports(t_per_capita)` =
-           replace_na(`Exports(t_per_capita)`, 0))
+           replace_na(`Exports(t_per_capita)`, 0)) %>%
+  filter(area_type == "Country")
   
 cleaned_net_trade <- cleaned_net_trade %>% mutate(net_status_per_capita = ifelse(`Imports(t_per_capita)` > `Exports(t_per_capita)`, "Net Importer", ifelse(`Exports(t_per_capita)` > `Imports(t_per_capita)`, "Net Exporter", "Other")))
 ```
@@ -269,7 +266,7 @@ exporters <- cleaned_net_trade %>%
 t_test_result <- t.test(importers$log_production, exporters$log_production)
 
 # Print the t-test result
-print(t_test_result)
+t_test_result
 
 ```
 
@@ -287,5 +284,9 @@ t_test_export <- t.test(export_before_2008, export_after_2010)
 # Print the t-test result
 print(t_test_export)
 ```
+
+
+
+
 
 
