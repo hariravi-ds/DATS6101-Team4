@@ -139,6 +139,7 @@ missing_values <- colSums(is.na(df_filtered))
 missing_values
 ```
 ```{r}
+#data cleaning
 #if all production values is NA, set to 0
 df_cleaned <- df_filtered %>%
   mutate(Production = if_else(
@@ -213,12 +214,15 @@ final_df <- population_data %>%
 colSums(is.na(final_df))
 ```
 ```{r}
+library(ggplot2)
 library(patchwork)
 library(corrplot)
 
 # Correlation matrix with heatmap
 cor_matrix <- cor(final_df[, c("Production", "Population", "Land_Use")], use = "complete.obs")
 corrplot(cor_matrix, method = "color", addCoef.col = "black")
+```
+```{r}
 
 #to see the distribution of each column
 plots <- list()
@@ -323,97 +327,45 @@ ggplot(final_df, aes(x = Year, y = Production, color = Country)) +
   geom_line(alpha = 0.7, size = 1) +
   labs(title = "Production Over Time by Country", x = "Year", y = "Population") + theme_minimal() +
   theme(legend.position = "none")
-
-#total production by year
-total_prod <- final_df %>%
-  group_by(Year) %>%
-  summarise(total_prod = sum(Production))
-
-ggplot(total_prod, aes(x = Year, y = total_prod)) +
-  geom_bar(stat = "identity", fill = "blue") +
-  labs(title = "Total Production by Year", x = "Year", y = "Total Production") +
-  theme_minimal()
-
-#to Calculate the average of it over countries, plot against the years Discuss the trend
-# Grouping by year and applying mean aggregation
-grouped_prod <- final_df %>%
-  group_by(Year) %>%
-  summarize(Production = mean(Production, na.rm = TRUE),
-            .groups = 'drop')
-
-# Plotting a scatterplot with year vs CO2 Emission
-ggplot(grouped_prod, aes(x = Production, y = Year)) +
-  geom_point() +
-  labs(title = 'Production vs Year', x = 'Production', y = 'Year') +
-  theme_minimal()
 ```
 ```{r}
-#subtract the average of that column for the country
-# Assuming 'final_df' is your data frame and the columns are specified
-copied_df <- final_df
+# Combined total and average production by year
+combined_prod <- final_df %>%
+  group_by(Year) %>%
+  summarise(
+    total_prod = sum(Production),
+    average_prod = mean(Production),
+    .groups = 'drop'
+  )
 
-# Create a list to store the plots
-plots <- list()
-
-# Looping through each column to create scatterplots
-for (i in seq_along(c("Population", "Land_Use"))) {
-  col1 <- c("Population", "Land_Use", "Production")[i]
-  
-  # Centering the data by subtracting the country average
-  copied_df <- copied_df %>%
-    group_by(Country) %>%
-    mutate(!!col1 := get(col1) - mean(get(col1), na.rm = TRUE)) %>%
-    ungroup()
-  
-  # Create scatter plot with production
-  p <- ggplot(copied_df, aes_string(x = col1, y = "Production")) +
-    geom_point(alpha = 0.7, color = 'blue') +
-    labs(
-      title = paste("Scatter Plot of", col1, "vs Production"),
-      x = col1,
-      y = "Production"
-    ) +
-    theme_minimal()
-  plots[[i]] <- p
-}
-
-# Arrange and display the plots
-combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
-print(combined_plot)
-```
-```{r}
-#subtract the average of that column for the year
-# Assuming 'final_df' is your data frame and the columns are specified
-copied_df <- final_df
-
-# Create a list to store the plots
-plots <- list()
-
-# Looping through each column to create scatterplots
-for (i in seq_along(c("Population", "Land_Use"))) {
-  col1 <- c("Population", "Land_Use", "Production")[i]
-  
-  # Centering the data by subtracting the year average
-  copied_df <- copied_df %>%
-    group_by(Year) %>%
-    mutate(!!col1 := get(col1) - mean(get(col1), na.rm = TRUE)) %>%
-    ungroup()
-  
-  # Create scatter plot with production
-  p <- ggplot(copied_df, aes_string(x = col1, y = "Production")) +
-    geom_point(alpha = 0.7, color = 'blue') +
-    labs(
-      title = paste("Scatter Plot of", col1, "vs Production"),
-      x = col1,
-      y = "Production"
-    ) +
-    theme_minimal()
-  plots[[i]] <- p
-}
-
-# Arrange and display the plots
-combined_plot <- wrap_plots(plots, ncol = 2)  # Adjust ncol for layout
-print(combined_plot)
+# Create a combined plot for total and average production
+ggplot() +
+  geom_bar(
+    data = combined_prod,
+    aes(x = Year, y = total_prod),
+    stat = "identity",
+    fill = "blue"
+  ) +
+  # Line plot for average production (secondary y-axis)
+  geom_line(data = combined_prod,
+            aes(x = Year, y = average_prod * (
+              max(combined_prod$total_prod) / max(combined_prod$average_prod)
+            )),
+            color = "red") +
+  geom_point(
+    data = combined_prod,
+    aes(x = Year, y = average_prod * (
+      max(combined_prod$total_prod) / max(combined_prod$average_prod)
+    )),
+    color = "red",
+    size = 3
+  ) +
+  labs(title = "Total and Average Production by Year", x = "Year") +
+  theme_minimal() +
+  scale_y_continuous(name = "Total Production",
+                     sec.axis = sec_axis(~ . / (
+                       max(combined_prod$total_prod) / max(combined_prod$average_prod)
+                     ), name = "Average Production"))
 ```
 ```{r}
 ggplot(final_df, aes(x = Country, y = Production, fill = Country)) +
@@ -435,51 +387,6 @@ qqnorm(no_outliers$Production, main = "Production QQ Plot")
 qqline(no_outliers$Production, col = "red")
 ```
 ```{r}
-#Compare production across different countries
-anova_res_country <- aov(Production ~ Country, data = final_df)
-summary(anova_res_country)
-
-#Compare production across different year
-anova_res_year <- aov(Production ~ Year, data = final_df)
-summary(anova_res_year)
-```
-```{r}
-# Create a new variable for high production (e.g., > 25 million tons)
-#Is there a significant association between the country of origin and high rice production levels?
-#null: There is no association between the country and high rice production (the distribution of high production is the same across all countries).
-data <- final_df %>%
-  mutate(high_production = ifelse(Production > 25000000, "Yes", "No"))
-#A p-value of p < 2.2e-16 from the Chi-Square test indicates a very strong statistical significance in the relationship between the country of origin and high rice production levels. This means that the null hypothesis can be rejected that there is no association between the two categorical variables.
-
-# Create a contingency table
-contingency_table <- table(data$Country, data$high_production)
-chi_square_result <- chisq.test(contingency_table)
-print(chi_square_result)
-
-# Calculate proportions of high production for each country
-country_proportions <- as.data.frame(contingency_table) %>%
-  group_by(Var1) %>%  # Var1 corresponds to Country
-  summarize(High_Production_Proportion = sum(Freq[Var2 == "Yes"]) / sum(Freq)) %>%
-  arrange(desc(High_Production_Proportion))
-
-# Rename the columns for clarity
-colnames(country_proportions) <- c("Country", "High_Production_Proportion")
-
-# Display the results
-print(country_proportions)
-
-# Bar plot of high production proportions by country
-ggplot(country_proportions,
-       aes(
-         x = reorder(Country, High_Production_Proportion),
-         y = High_Production_Proportion
-       )) +
-  geom_bar(stat = "identity", fill = "steelblue") +
-  coord_flip() +  # Flip coordinates for better readability
-  labs(title = "Proportion of High Rice Production by Country", x = "Country", y = "Proportion of High Production") +
-  theme_minimal()
-```
-```{r}
 # Assume data is from before and after COVID-19 (e.g., 2019 vs 2020)
 pre_covid <- data %>% filter(Year == 2019)
 post_covid <- data %>% filter(Year == 2020)
@@ -489,46 +396,37 @@ t_test_covid <- t.test(pre_covid$Production, post_covid$Production)
 print(t_test_covid)
 ```
 ```{r}
-# Assume you want to compare high vs. low land use
-data <- data %>%
-  mutate(land_use_category = ifelse(Land_Use > median(Land_Use), "High", "Low"))
-
-t_test_land_use <- t.test(Production ~ land_use_category, data = data)
-print(t_test_land_use)
-```
-```{r}
-# Calculate the top quartile for production in the last five years
-last_five_years <- c(2020, 2019, 2018, 2017, 2016)
-
 # Filter data for the last five years
-filtered_data <- data %>%
-  filter(Year %in% last_five_years)
+recent_data <- data %>%
+  filter(Year >= max(Year) - 4)
 
-filtered_data <- filtered_data %>%
+recent_data <- recent_data %>%
   mutate(High_Producer = ifelse(Production > 25000000, "Yes", "No"))
 
-# Count the number of years each country produced over 25 million tons
-consistent_production_counts <- filtered_data %>%
-  mutate(High_Production = ifelse(Production > 25000000, 1, 0)) %>%  # Create a binary indicator
+
+# Identify countries that consistently produced over 25 million tons annually
+consistent_high_producers <- recent_data %>%
   group_by(Country) %>%
-  summarize(Consistent_Production_Years = sum(High_Production)) %>%  # Count the number of high production years
-  filter(Consistent_Production_Years == 5)  # Keep only those with 5 years of high production
+  filter(all(Production > 25000000)) %>%
+  summarise(avg_production = mean(Production)) %>%
+  arrange(desc(avg_production))
 
 # Calculate the production threshold for the top quartile over the last five years
-top_quartile_threshold <- filtered_data %>%
+top_quartile_threshold <- recent_data %>%
   summarize(Top_Quartile = quantile(Production, 0.75)) %>%
   pull(Top_Quartile)
 
 # Filter the countries that are in the top quartile and have consistent production
-top_quartile_countries <- consistent_production_counts %>%
-  inner_join(filtered_data %>%
-               group_by(Country) %>%
-               summarize(Average_Production = mean(Production)),
-             by = "Country") %>%
-  filter(Average_Production >= top_quartile_threshold)
+top_quartile_countries <- consistent_high_producers %>%
+  filter(avg_production >= top_quartile_threshold)
 
+# Print results
+cat("Countries consistently producing over 25 million tons in the last five years:\n")
+print(top_quartile_countries)
+```
+```{r}
 # Calculate improvement over the last five years for these countries
-improvement_data <- filtered_data %>%
+improvement_data <- recent_data %>%
   filter(Country %in% top_quartile_countries$Country) %>%
   group_by(Country) %>%
   summarize(Improvement = last(Production) - first(Production)) %>%
@@ -538,70 +436,136 @@ improvement_data <- filtered_data %>%
 most_improved_country <- improvement_data %>%
   filter(Improvement == max(Improvement))  # Identify the country with the most improvement
 
-# Print results
-cat("Countries consistently producing over 25 million tons in the last five years:\n")
-print(top_quartile_countries)
-
 cat("\nCountries showing the most improvement in production:\n")
 print(most_improved_country)
+```
+```{r}
+# Land use efficiency (tons per hectare)
+land_use_efficiency <- recent_data %>%
+  mutate(efficiency = Production / Land_Use) %>%
+  group_by(Country) %>%
+  summarise(avg_efficiency = mean(efficiency)) %>%
+  arrange(desc(avg_efficiency))
 
-# Perform the t-test
-t_test_result <- t.test(Production ~ High_Producer, data = filtered_data)
+print(land_use_efficiency)
+```
+```{r}
+# Production per capita (tons per person)
+production_per_capita <- recent_data %>%
+  mutate(production_per_capita = Production / Population) %>%
+  group_by(Country) %>%
+  summarise(avg_production_per_capita = mean(production_per_capita)) %>%
+  arrange(desc(avg_production_per_capita))
 
-# Print the results of the t-test
-print(t_test_result)
-#There is a significant difference in average rice production between high producers and low producers.
+print(production_per_capita)
+```
+```{r}
+# Ensure these metrics are calculated and available in the data
+recent_data <- recent_data %>%
+  mutate(efficiency = Production / Land_Use,
+         production_per_capita = Production / Population) %>%
+  filter(
+    !is.na(efficiency) &
+      !is.na(production_per_capita) &
+      efficiency > 0 &
+      production_per_capita > 0 & is.finite(efficiency)
+  )
 
-ggplot(filtered_data, aes(x = Year, y = Production, group = Country, color = Country)) +
+# Separate data into high-producers and others
+high_producers <- recent_data %>%
+  filter(Country %in% consistent_high_producers$Country)
+
+non_high_producers <- recent_data %>%
+  filter(!Country %in% consistent_high_producers$Country)
+
+print(consistent_high_producers)
+```
+```{r}
+# Boxplot for production per capita
+ggplot(recent_data, aes(
+  x = ifelse(
+    Country %in% consistent_high_producers$Country,
+    "High Producers",
+    "Non-High Producers"
+  ),
+  y = production_per_capita
+)) +
+  geom_boxplot() +
+  labs(title = "Comparison of Production per Capita", x = "Country Group", y = "Production per Capita") +
+  theme_minimal()
+
+# Boxplot for land use efficiency
+ggplot(recent_data, aes(
+  x = ifelse(
+    Country %in% consistent_high_producers$Country,
+    "High Producers",
+    "Non-High Producers"
+  ),
+  y = efficiency
+)) +
+  geom_boxplot() +
+  labs(title = "Comparison of Land Use Efficiency", x = "Country Group", y = "Land Use Efficiency (tons/hectare)") +
+  theme_minimal()
+```
+```{r}
+ggplot(recent_data,
+       aes(
+         x = Year,
+         y = Production,
+         group = Country,
+         color = Country
+       )) +
   geom_line() +
-  labs(title = "Rice Production Over the Last Five Years",
-       x = "Year", y = "Production (in tons)") +
+  labs(title = "Rice Production Over the Last Five Years", x = "Year", y = "Production (in tons)") +
   theme_minimal() +
   theme(legend.position = "none")
 
-high_producers <- filtered_data %>%
-  mutate(High_Producer = ifelse(Production > 25000000, "Yes", "No")) %>%
-  group_by(Country) %>%
-  summarize(Consistently_High = sum(High_Producer == "Yes") == 5) %>%
-  filter(Consistently_High == TRUE)
-
-# Categorize countries based on consistent high production
-filtered_data <- filtered_data %>%
-  mutate(High_Producer = ifelse(Country %in% high_producers$Country, "Consistent High Producer", "Others"))
-
-#Scatter Plot to examine any relationships between production and other factors, such as land use or population.
-ggplot(filtered_data, aes(x = Population, y = Production, color = High_Producer)) +
-  geom_point(size = 3) +
-  labs(title = "Production vs Population",
-       x = "Population", y = "Production (in tons)") +
-  theme_minimal()
-
-# Calculate improvement over the five years
-improvement_data <- filtered_data %>%
-  group_by(Country) %>%
-  summarize(Improvement = last(Production) - first(Production)) %>%
-  arrange(desc(Improvement))
-
-print(improvement_data)
-
 # Visualize the improvement
-ggplot(improvement_data, aes(x = reorder(Country, Improvement), y = Improvement, fill = Improvement > 0)) +
+ggplot(improvement_data,
+       aes(
+         x = reorder(Country, Improvement),
+         y = Improvement,
+         fill = Improvement > 0
+       )) +
   geom_bar(stat = "identity") +
   coord_flip() +
-  labs(title = "Improvement in Rice Production Over the Last Five Years",
-       x = "Country", y = "Change in Production (in tons)") +
+  labs(title = "Improvement in Rice Production Over the Last Five Years", x = "Country", y = "Change in Production (in tons)") +
   theme_minimal()
 
 # Create a summary of average production by category
-avg_production <- filtered_data %>%
+avg_production <- recent_data %>%
   group_by(High_Producer) %>%
   summarize(Average_Production = mean(Production, na.rm = TRUE))
 
 # Bar plot comparing average production of consistent high producers vs others
-ggplot(avg_production, aes(x = High_Producer, y = Average_Production, fill = High_Producer)) +
+ggplot(avg_production,
+       aes(x = High_Producer, y = Average_Production, fill = High_Producer)) +
   geom_bar(stat = "identity", width = 0.6) +
-  labs(title = "Average Rice Production: Consistent High Producers vs Others",
-       x = "Category", y = "Average Production (in tons)") +
+  labs(title = "Average Rice Production: Consistent High Producers vs Others", x = "Category", y = "Average Production (in tons)") +
   theme_minimal() +
-  scale_fill_manual(values = c("Consistent High Producer" = "blue", "Others" = "red"))
+  scale_fill_manual(values = c(
+    "Consistent High Producer" = "blue",
+    "Others" = "red"
+  ))
+```
+```{r}
+# Compare average land use efficiency
+t_test_efficiency <- t.test(
+  high_producers$efficiency, 
+  non_high_producers$efficiency, 
+  alternative = "greater"
+)
+
+# Compare average production per capita
+t_test_production_per_capita <- t.test(
+  high_producers$production_per_capita, 
+  non_high_producers$production_per_capita, 
+  alternative = "greater"
+)
+
+print(t_test_efficiency)
+#The p-value of 0.0004394 for the t-test on efficiency indicates a very statistically significant difference between the efficiency of consistently high-producing countries and non-high-producing countries.
+
+print(t_test_production_per_capita)
+#The p-value of 1.908e-12 for the t-test on production per capita indicates that there is a highly statistically significant difference between the production per capita of the high-producing countries and those that did not consistently meet the 25 million tons threshold.
 ```
