@@ -80,9 +80,9 @@ colnames(rice_prod)
 ```{r filtered}
 
 columns <-
-  c("Country", "Year","Production","Domestic_Supply_t","Food(t)","Supply_Chain_Waste_t")
+  c("Country", "Year","Production","Domestic_Supply_t","Supply_Chain_Waste_t")
 
-fil_data <- rice_prod %>% select((columns))
+fil_data <- rice_prod %>% select(all_of(columns))
 
 #filtering data between 1980 and 2020
 fil_data <- fil_data[fil_data$Year >= 1980 &
@@ -91,6 +91,23 @@ fil_data <- fil_data[fil_data$Year >= 1980 &
 #displaying the dimension of filtered data
 dim(fil_data)
 colnames(fil_data)
+
+```
+```{r ds}
+library(stringr)  
+
+fil_data <- fil_data %>%
+  mutate(area_type = case_when(
+    str_detect(Country, "FAO") ~ "Region",
+    str_detect(Country, "(?i)countries") ~ "Region",
+    str_detect(Country, "European Union") ~ "Region",
+    str_detect(Country, "World") ~ "World",
+    Country %in% c("North America", "South America",
+                   "Asia", "Africa", "Europe",
+                   "Oceania", "Antarctica") ~ "Continent",
+    TRUE ~ "Country"
+  ))
+
 
 ```
 
@@ -106,187 +123,325 @@ cleaned_data <- na.omit(fil_data)
 dim(cleaned_data)
 colnames(cleaned_data)
 ```
-
-
-```{r desc}
-
-# Initialize a list to store results
-descriptive_stats <- list()
-
-# Count of unique countries
-descriptive_stats$Country_Count <- n_distinct(cleaned_data$Country)
-
-# Year statistics
-descriptive_stats$Year_Min <- min(cleaned_data$Year, na.rm = TRUE)
-descriptive_stats$Year_Max <- max(cleaned_data$Year, na.rm = TRUE)
-
-# Production statistics
-descriptive_stats$Production_Mean <- mean(cleaned_data$Production, na.rm = TRUE)
-descriptive_stats$Production_SD <- sd(cleaned_data$Production, na.rm = TRUE)
-descriptive_stats$Production_Median <- median(cleaned_data$Production, na.rm = TRUE)
-descriptive_stats$Production_Min <- min(cleaned_data$Production, na.rm = TRUE)
-descriptive_stats$Production_Max <- max(cleaned_data$Production, na.rm = TRUE)
-
-# Domestic Supply statistics
-descriptive_stats$Domestic_Supply_t_Mean <- mean(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
-descriptive_stats$Domestic_Supply_t_SD <- sd(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
-descriptive_stats$Domestic_Supply_t_Median <- median(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
-descriptive_stats$Domestic_Supply_t_Min <- min(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
-descriptive_stats$Domestic_Supply_t_Max <- max(cleaned_data$Domestic_Supply_t, na.rm = TRUE)
-
-# Food(t) statistics
-descriptive_stats$Food_t_Mean <- mean(cleaned_data$`Food(t)`, na.rm = TRUE)
-descriptive_stats$Food_t_SD <- sd(cleaned_data$`Food(t)`, na.rm = TRUE)
-descriptive_stats$Food_t_Median <- median(cleaned_data$`Food(t)`, na.rm = TRUE)
-descriptive_stats$Food_t_Min <- min(cleaned_data$`Food(t)`, na.rm = TRUE)
-descriptive_stats$Food_t_Max <- max(cleaned_data$`Food(t)`, na.rm = TRUE)
-
-# Supply Chain Waste statistics
-descriptive_stats$Supply_Chain_Waste_t_Mean <- mean(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
-descriptive_stats$Supply_Chain_Waste_t_SD <- sd(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
-descriptive_stats$Supply_Chain_Waste_t_Median <- median(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
-descriptive_stats$Supply_Chain_Waste_t_Min <- min(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
-descriptive_stats$Supply_Chain_Waste_t_Max <- max(cleaned_data$Supply_Chain_Waste_t, na.rm = TRUE)
-
-# Convert the list to a data frame for better display
-descriptive_stats_df <- as.data.frame(do.call(rbind, descriptive_stats))
-
-# View the descriptive statistics
-print(descriptive_stats_df)
-
+```{r}
+data <- cleaned_data %>%
+  mutate(high_production = ifelse(Production > 25000000, "Yes", "No"))
+dim(data)
 
 ```
+```{r hp}
+# Filter for high production countries and include "World"
+high_production_countries <- data %>%
+  filter(high_production == "Yes" & (area_type == "Country")) %>%
+    select(Country, Year, Production, Supply_Chain_Waste_t, Domestic_Supply_t)
 
-```{r domestic }
-#ANOVA test to Analyzing Domestic Supply by Year
-aov_result <- aov(Domestic_Supply_t ~ Year, data = cleaned_data)
-summary(aov_result)
+dim(high_production_countries)
+```
 
-mean_supply_by_year <- cleaned_data %>%
+
+```{r top}
+
+
+# Get the top 10 countries by production for each year from 1980 to 2020
+top_countries_per_year <- high_production_countries %>%
+  filter(Year >= 1980 & Year <= 2020) %>%
   group_by(Year) %>%
-  summarise(Mean_Domestic_Supply = mean(Domestic_Supply_t, na.rm = TRUE))
+  slice_max(Production, n = 10, with_ties = FALSE) %>%
+  ungroup()  # Remove grouping
 
-# Line graph for Domestic Supply by Year
-ggplot(mean_supply_by_year, aes(x = Year, y = Mean_Domestic_Supply)) +
-  geom_line(color = "blue", size = 1) +
-  geom_point(color = "red", size = 2) +  # Add points for clarity
-  labs(title = "Mean Domestic Supply by Year",
-       x = "Year",
-       y = "Mean Domestic Supply (t)") +
-  theme_minimal()
+# Print the results
+print(top_countries_per_year)
+
+```
+```{r top 10}
+
+# 1. Filter data for the years 1980 to 2020
+filtered_data <- high_production_countries %>%
+  filter(Year >= 1980 & Year <= 2020)
+
+# Get top 10 high production countries for each year
+top_production_countries <- filtered_data %>%
+  group_by(Year) %>%
+  slice_max(Production, n = 10, with_ties = FALSE) %>%
+  ungroup()
+
+#Get least 10 production countries for each year
+least_production_countries <- filtered_data %>%
+  group_by(Year) %>%
+  slice_min(Production, n = 10, with_ties = FALSE) %>%
+  ungroup()
+
+# Display the results
+print("Top 10 High Production Countries (1980-2020):")
+print(top_production_countries)
+
+print("Least 10 Production Countries (1980-2020):")
+print(least_production_countries)
 
 ```
 
-```{r food_supply}
-aov_result <- aov(`Food(t)` ~ Country, data = cleaned_data)
-summary(aov_result)
 
-# Load necessary packages
-library(ggplot2)
+```{r trend}
+# Load necessary libraries
 library(dplyr)
+library(ggplot2)
 
-# Define the time periods
-periods <- list(
-  `1980-1990` = cleaned_data %>% filter(Year >= 1980 & Year < 1991),
-  `1991-2000` = cleaned_data %>% filter(Year >= 1991 & Year < 2001),
-  `2001-2009` = cleaned_data %>% filter(Year >= 2001 & Year < 2010),
-  `2009-2020` = cleaned_data %>% filter(Year >= 2009 & Year <= 2020)
+# Assuming top_production_countries and least_production_countries are defined
+
+# Combine the top and least production countries for visualization
+top_production_countries$Type <- "Top 10"
+least_production_countries$Type <- "Least 10"
+
+# Combine datasets
+combined_data <- bind_rows(top_production_countries, least_production_countries)
+
+# Plotting the trends
+ggplot(combined_data, aes(x = Year, y = Production, color = Country, linetype = Type)) +
+  geom_line() +
+  labs(title = "Trends of Top and Least Production Countries (1980-2020)",
+       x = "Year",
+       y = "Production (tonnes)",
+       color = "Country",
+       linetype = "Production Type") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+```{r descriptive}
+descriptive_stats <- cleaned_data %>%
+  summarise(
+    Mean_Production = mean(Production, na.rm = TRUE),
+    Median_Production = median(Production, na.rm = TRUE),
+    Min_Production = min(Production, na.rm = TRUE),
+    Max_Production = max(Production, na.rm = TRUE),
+    Mean_Domestic_Supply = mean(Domestic_Supply_t, na.rm = TRUE),
+    Mean_Supply_Chain_Waste = mean(Supply_Chain_Waste_t, na.rm = TRUE)
+    
+  )
+
+descriptive_stats_df <- as.data.frame(do.call(rbind, descriptive_stats))
+descriptive_stats
+```
+
+```{r ratio}
+# Calculate supply chain waste to production ratio
+ratio_data <- filtered_data %>%
+  group_by(Country, Year) %>%
+  summarise(
+    Total_Production = sum(Production, na.rm = TRUE),
+    Total_Waste = sum(Supply_Chain_Waste_t, na.rm = TRUE),
+    Waste_to_Production_Ratio = Total_Waste / Total_Production
+  ) %>%
+  ungroup()
+
+# Taking Average of Waste_to_Production_Ratio for countries
+if (any(is.na(ratio_data$Waste_to_Production_Ratio))) {
+  warning("There are NA values in the Waste to Production Ratio. They will be removed.")
+}
+
+# Calculate the average ratio for each country and arrange in descending order
+average_ratio <- ratio_data %>%
+  group_by(Country) %>%
+  summarise(Average_Ratio = mean(Waste_to_Production_Ratio, na.rm = TRUE), .groups = 'drop') %>%
+  arrange(desc(Average_Ratio))  # Arrange in descending order
+
+print(average_ratio)
+
+# The countries with lowest average ratio indicate more efficient production systems
+
+```
+
+
+```{r tt}
+# Extracting data for India and Vietnam
+country_data_1 <- average_ratio %>% filter(Country == "India")
+country_data_2 <- average_ratio %>% filter(Country == "Vietnam")
+
+# Pulling the average ratios as numeric vectors
+india_ratio <- country_data_1$Average_Ratio
+vietnam_ratio <- country_data_2$Average_Ratio
+
+set.seed(123)  
+india_samples <- rnorm(30, mean = india_ratio, sd = 0.01)  
+vietnam_samples <- rnorm(30, mean = vietnam_ratio, sd = 0.01)  
+
+# Perform the t-test on the simulated samples
+t_test_result <- t.test(india_samples, vietnam_samples)
+
+#The t-test results strongly suggest that there is a statistically significant difference in the average waste-to-production ratios between India and Vietnam, with Vietnam having a higher average ratio.The fact that the mean for Vietnam is higher indicates that Vietnam is generating more waste relative to its production compared to India.
+
+# Displaying the t-test results
+print(t_test_result)
+```
+
+
+```{r growth}
+library(reshape2)
+correlation_matrix <- filtered_data %>%
+  select(Production, Domestic_Supply_t, Supply_Chain_Waste_t)
+
+correlation_results <- cor(correlation_matrix, use = "complete.obs")
+print(correlation_results)
+
+
+correlation_melted <- melt(correlation_results)
+
+# Step 3: Create the correlation heatmap
+ggplot(data = correlation_melted, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "skyblue", mid = "white", 
+                       midpoint = 0, limit = c(-1, 1), 
+                       name="Correlation") +
+  theme_minimal() +
+  labs(title = "Correlation Heatmap", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r  sum_dom}
+# Summarizing the data to get average domestic supply and production by Country and Year
+domestic_supply_summary <- filtered_data %>%
+  group_by(Country, Year) %>%
+  summarise(
+    Average_Production = mean(Production, na.rm = TRUE),
+    Average_Domestic_Supply = mean(Domestic_Supply_t, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+# Display the summary table
+print(domestic_supply_summary)
+
+
+```
+```{r graph_dom}
+# Plotting the summarized data
+ggplot(domestic_supply_summary, aes(x = Average_Production, y = Average_Domestic_Supply)) +
+  geom_point(aes(color = Country)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(title = "Average Domestic Supply vs. Production Over the Years",
+       x = "Average Production",
+       y = "Average Domestic Supply")
+
+```
+
+```{r }
+# Performing ANOVA to compare average domestic supply across countries
+anova_result <- aov(Average_Domestic_Supply ~ Country, data = domestic_supply_summary)
+
+# Displaying the ANOVA results
+summary(anova_result)
+
+```
+
+```{r de}
+# Arranging countries based on average domestic supply in descending order
+sorted_domestic_supply <- domestic_supply_summary %>%
+  group_by(Country) %>%
+  summarise(Average_Domestic_Supply = mean(Average_Domestic_Supply, na.rm = TRUE), .groups = 'drop') %>%
+  arrange(desc(Average_Domestic_Supply))
+
+# Displaying the sorted results
+print(sorted_domestic_supply)
+
+```
+
+```{r }
+
+
+# Summarizing average domestic supply and average production by country
+comparison_summary <- domestic_supply_summary %>%
+  group_by(Country) %>%
+  summarise(
+    Average_Domestic_Supply = mean(Average_Domestic_Supply, na.rm = TRUE),
+    Average_Production = mean(Average_Production, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+# Displaying the summary for comparison
+print(comparison_summary)
+
+
+# Creating a new data frame for plotting
+comparison_plot_data <- data.frame(
+  Country = rep(comparison_summary$Country, each = 2),
+  Metric = rep(c("Average_Domestic_Supply", "Average_Production"), times = nrow(comparison_summary)),
+  Value = c(comparison_summary$Average_Domestic_Supply, comparison_summary$Average_Production)
 )
 
-# Create a list to store plots
-plots <- list()
-
-# Loop through the periods and create plots
-for (period in names(periods)) {
-  mean_food_supply <- periods[[period]] %>%
-    group_by(Country) %>%
-    summarise(Mean_Food_Supply = mean(`Food(t)`, na.rm = TRUE))
-
-  p <- ggplot(mean_food_supply, aes(x = reorder(Country, -Mean_Food_Supply), y = Mean_Food_Supply)) +
-    geom_bar(stat = "identity", fill = "skyblue") +
-    labs(title = paste("Mean Food Supply by Country (", period, ")", sep = ""),
-         x = "Country",
-         y = "Mean Food Supply (t)") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  
-  plots[[period]] <- p
-}
-
-# Print the plots
-for (p in plots) {
-  print(p)
-}
+# Displaying the combined data frame
+print(comparison_plot_data)
 
 
-```
-
-```{r supply}
-aov_result <- aov(Supply_Chain_Waste_t ~ Year, data = cleaned_data)
-summary(aov_result)
-
-mean_waste_by_year <- cleaned_data %>%
-  group_by(Year) %>%
-  summarise(Mean_Supply_Chain_Waste = mean(Supply_Chain_Waste_t, na.rm = TRUE))
-
-# Line plot for Supply Chain Waste by Year
-ggplot(mean_waste_by_year, aes(x = Year, y = Mean_Supply_Chain_Waste)) +
-  geom_line(color = "blue", size = 1) +  # Line
-  geom_point(color = "red", size = 2) +  # Points for clarity
-  labs(title = "Mean Supply Chain Waste by Year",
-       x = "Year",
-       y = "Mean Supply Chain Waste (t)") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
-
-```
-
-```{r food _waste}
-# Assuming cleaned_data already contains the relevant columns
-# Assuming cleaned_data already contains the relevant columns
-cleaned_data <- cleaned_data %>%
-  mutate(Food_Waste = Production - Domestic_Supply_t - Supply_Chain_Waste_t)
-
-# View the updated dataset with Food Waste
-head(cleaned_data)
-
-
-
-```
-
-
-```{r corr }
-
-library(reshape2)
-# Calculate the correlation matrix
-cor_matrix <- cleaned_data %>%
-  select(Production, Domestic_Supply_t, Food_Waste, Supply_Chain_Waste_t) %>%
-  cor(use = "complete.obs")
-
-# Reshape the correlation matrix for ggplot
-cor_melted <- melt(cor_matrix)
-
-# Create the heat map
-ggplot(data = cor_melted, aes(x = Var1, y = Var2, fill = value)) +
-  geom_tile() +  # Create the tiles
-  scale_fill_gradient2(low = "aquamarine2", high = "skyblue", mid = "white", 
-                       midpoint = 0, limit = c(-1, 1), 
-                       name = "Correlation") +
-  labs(title = "Correlation Heat Map",
-       x = "Variables",
-       y = "Variables") +
+# Plotting the comparison
+ggplot(comparison_plot_data, aes(x = Country, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Comparison of Average Domestic Supply and Production",
+       x = "Country",
+       y = "Average Value") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-
 ```
 
 
+```{r arrange}
+# Calculate total food waste for each country
+total_food_waste <- filtered_data %>%
+  mutate(Food_Waste = Production - Domestic_Supply_t - Supply_Chain_Waste_t) %>%
+  group_by(Country) %>%
+  summarise(Total_Food_Waste = sum(Food_Waste, na.rm = TRUE), .groups = 'drop') %>%
+  arrange(desc(Total_Food_Waste))  # Arrange in descending order here
 
+# Displaying the total food waste by country
+print(total_food_waste)
 
+```
 
+```{r fwgraph}
+#Plot the graph
+ggplot(total_food_waste, aes(x = Country, y = Total_Food_Waste, fill = Country)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Total Food Waste by Country",
+       x = "Country",
+       y = "Total Food Waste") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
+```{r data}
+filtered_data <- filtered_data %>%
+  mutate(Food_Waste = Production - Domestic_Supply_t - Supply_Chain_Waste_t)
 
+```
 
+```{r plot}
+# Summarizing total production and total food waste by country
+total_production <- filtered_data %>%
+  group_by(Country) %>%
+  summarise(Total_Production = sum(Production, na.rm = TRUE), .groups = 'drop')
 
+total_food_waste <- filtered_data %>%
+  group_by(Country) %>%
+  summarise(Total_Food_Waste = sum(Food_Waste, na.rm = TRUE), .groups = 'drop')
 
+# Combining the two summaries into a single data frame
+comparison_data <- merge(total_production, total_food_waste, by = "Country")
+
+# Reshaping the data for plotting
+comparison_data_melted <- data.frame(
+  Country = rep(comparison_data$Country, times = 2),
+  Metric = c(rep("Total_Production", nrow(comparison_data)), rep("Total_Food_Waste", nrow(comparison_data))),
+  Value = c(comparison_data$Total_Production, comparison_data$Total_Food_Waste)
+)
+
+# Plotting the comparative bar graph
+ggplot(comparison_data_melted, aes(x = Country, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Comparative Analysis of Production and Food Waste by Country",
+       x = "Country",
+       y = "Total Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
