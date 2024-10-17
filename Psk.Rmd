@@ -20,6 +20,7 @@ library(ezids)
 library(dplyr)
 library(ggplot2)
 library(zoo)
+library(reshape2)
 ```
 
 ```{r pi}
@@ -107,8 +108,6 @@ fil_data <- fil_data %>%
                    "Oceania", "Antarctica") ~ "Continent",
     TRUE ~ "Country"
   ))
-
-
 ```
 
 ```{r null}
@@ -118,10 +117,10 @@ na_val
 dim(fil_data)
 ```
 ```{r clean}
-cleaned_data <- na.omit(fil_data)
-
+cleaned_data <- fil_data %>%
+  filter_all(all_vars(. != 0)) %>%  # Removes rows with any zero value
+  na.omit()  #removes rows with NA values
 dim(cleaned_data)
-colnames(cleaned_data)
 ```
 ```{r}
 data <- cleaned_data %>%
@@ -130,7 +129,7 @@ dim(data)
 
 ```
 ```{r hp}
-# Filter for high production countries and include "World"
+# Filter for high production countries
 high_production_countries <- data %>%
   filter(high_production == "Yes" & (area_type == "Country")) %>%
     select(Country, Year, Production, Supply_Chain_Waste_t, Domestic_Supply_t)
@@ -140,7 +139,6 @@ dim(high_production_countries)
 
 
 ```{r top}
-
 
 # Get the top 10 countries by production for each year from 1980 to 2020
 top_countries_per_year <- high_production_countries %>%
@@ -165,16 +163,18 @@ top_production_countries <- filtered_data %>%
   slice_max(Production, n = 10, with_ties = FALSE) %>%
   ungroup()
 
+# Display the results
+print("Top 10 High Production Countries (1980-2020):")
+print(top_production_countries)
+
+
+```
+```{r least}
 #Get least 10 production countries for each year
 least_production_countries <- filtered_data %>%
   group_by(Year) %>%
   slice_min(Production, n = 10, with_ties = FALSE) %>%
   ungroup()
-
-# Display the results
-print("Top 10 High Production Countries (1980-2020):")
-print(top_production_countries)
-
 print("Least 10 Production Countries (1980-2020):")
 print(least_production_countries)
 
@@ -182,11 +182,6 @@ print(least_production_countries)
 
 
 ```{r trend}
-# Load necessary libraries
-library(dplyr)
-library(ggplot2)
-
-# Assuming top_production_countries and least_production_countries are defined
 
 # Combine the top and least production countries for visualization
 top_production_countries$Type <- "Top 10"
@@ -207,6 +202,29 @@ ggplot(combined_data, aes(x = Year, y = Production, color = Country, linetype = 
   theme(legend.position = "bottom")
 
 ```
+```{r hl}
+
+# Create a decade column
+combined_data <- combined_data %>%
+  mutate(Decade = floor(Year / 10) * 10)
+
+# Get highest and least producing countries for each decade
+decade_results <- combined_data %>%
+  group_by(Decade) %>%
+  summarize(
+    Highest_Producing_Country = Country[which.max(Production)],
+    Highest_Production = max(Production),
+    Least_Producing_Country = Country[which.min(Production)],
+    Least_Production = min(Production),
+    .groups = 'drop'
+  )
+
+# Display results
+print(decade_results)
+
+```
+
+
 
 ```{r descriptive}
 descriptive_stats <- cleaned_data %>%
@@ -244,7 +262,7 @@ if (any(is.na(ratio_data$Waste_to_Production_Ratio))) {
 average_ratio <- ratio_data %>%
   group_by(Country) %>%
   summarise(Average_Ratio = mean(Waste_to_Production_Ratio, na.rm = TRUE), .groups = 'drop') %>%
-  arrange(desc(Average_Ratio))  # Arrange in descending order
+  arrange(desc(Average_Ratio))  
 
 print(average_ratio)
 
@@ -252,6 +270,17 @@ print(average_ratio)
 
 ```
 
+```{r waste}
+
+ggplot(average_ratio, aes(x = reorder(Country, Average_Ratio), y = Average_Ratio)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates for better readability
+  labs(title = "Average Waste to Production Ratio by Country",
+       x = "Country",
+       y = "Average Waste to Production Ratio") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
 ```{r tt}
 # Extracting data for India and Vietnam
@@ -277,7 +306,7 @@ print(t_test_result)
 
 
 ```{r growth}
-library(reshape2)
+
 correlation_matrix <- filtered_data %>%
   select(Production, Domestic_Supply_t, Supply_Chain_Waste_t)
 
@@ -287,7 +316,7 @@ print(correlation_results)
 
 correlation_melted <- melt(correlation_results)
 
-# Step 3: Create the correlation heatmap
+#correlation heatmap
 ggplot(data = correlation_melted, aes(Var1, Var2, fill = value)) +
   geom_tile() +
   scale_fill_gradient2(low = "blue", high = "skyblue", mid = "white", 
@@ -300,39 +329,25 @@ ggplot(data = correlation_melted, aes(Var1, Var2, fill = value)) +
 ```
 
 ```{r  sum_dom}
-# Summarizing the data to get average domestic supply and production by Country and Year
 domestic_supply_summary <- filtered_data %>%
-  group_by(Country, Year) %>%
+  group_by(Country) %>%
   summarise(
-    Average_Production = mean(Production, na.rm = TRUE),
+    Total_Production = sum(Production, na.rm = TRUE),
     Average_Domestic_Supply = mean(Domestic_Supply_t, na.rm = TRUE),
     .groups = 'drop'
-  )
+  ) %>%
+  arrange(desc(Total_Production))  # Arrange in descending order
 
 # Display the summary table
 print(domestic_supply_summary)
 
-
 ```
-```{r graph_dom}
-# Plotting the summarized data
-ggplot(domestic_supply_summary, aes(x = Average_Production, y = Average_Domestic_Supply)) +
-  geom_point(aes(color = Country)) +
-  geom_smooth(method = "lm", se = FALSE) +
-  theme_minimal() +
-  labs(title = "Average Domestic Supply vs. Production Over the Years",
-       x = "Average Production",
-       y = "Average Domestic Supply")
-
-```
-
-```{r }
+```{r anov}
 # Performing ANOVA to compare average domestic supply across countries
 anova_result <- aov(Average_Domestic_Supply ~ Country, data = domestic_supply_summary)
 
 # Displaying the ANOVA results
 summary(anova_result)
-
 ```
 
 ```{r de}
@@ -344,42 +359,22 @@ sorted_domestic_supply <- domestic_supply_summary %>%
 
 # Displaying the sorted results
 print(sorted_domestic_supply)
-
 ```
 
-```{r }
+```{r ab}
 
-
-# Summarizing average domestic supply and average production by country
-comparison_summary <- domestic_supply_summary %>%
-  group_by(Country) %>%
-  summarise(
-    Average_Domestic_Supply = mean(Average_Domestic_Supply, na.rm = TRUE),
-    Average_Production = mean(Average_Production, na.rm = TRUE),
-    .groups = 'drop'
-  )
-
-# Displaying the summary for comparison
-print(comparison_summary)
-
-
-# Creating a new data frame for plotting
 comparison_plot_data <- data.frame(
-  Country = rep(comparison_summary$Country, each = 2),
-  Metric = rep(c("Average_Domestic_Supply", "Average_Production"), times = nrow(comparison_summary)),
-  Value = c(comparison_summary$Average_Domestic_Supply, comparison_summary$Average_Production)
+  Country = rep(domestic_supply_summary$Country, each = 2),
+  Metric = rep(c("Total Production", "Average Domestic Supply"), times = nrow(domestic_supply_summary)),
+  Value = c(domestic_supply_summary$Total_Production, sorted_domestic_supply$Average_Domestic_Supply)
 )
-
-# Displaying the combined data frame
-print(comparison_plot_data)
-
 
 # Plotting the comparison
 ggplot(comparison_plot_data, aes(x = Country, y = Value, fill = Metric)) +
   geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Comparison of Average Domestic Supply and Production",
+  labs(title = "Comparison of Total Production and Average Domestic Supply",
        x = "Country",
-       y = "Average Value") +
+       y = "Value") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
@@ -409,39 +404,44 @@ ggplot(total_food_waste, aes(x = Country, y = Total_Food_Waste, fill = Country))
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
-
-```{r data}
-filtered_data <- filtered_data %>%
-  mutate(Food_Waste = Production - Domestic_Supply_t - Supply_Chain_Waste_t)
-
-```
-
 ```{r plot}
-# Summarizing total production and total food waste by country
+#Calculate total food waste for each country
+total_food_waste <- filtered_data %>%
+  mutate(Food_Waste = Production - Domestic_Supply_t - Supply_Chain_Waste_t) %>%
+  group_by(Country) %>%
+  summarise(Total_Food_Waste = sum(Food_Waste, na.rm = TRUE), .groups = 'drop') %>%
+  arrange(desc(Total_Food_Waste))  # Arrange in descending order
+
+#Summarizing total production by country
 total_production <- filtered_data %>%
   group_by(Country) %>%
   summarise(Total_Production = sum(Production, na.rm = TRUE), .groups = 'drop')
 
-total_food_waste <- filtered_data %>%
-  group_by(Country) %>%
-  summarise(Total_Food_Waste = sum(Food_Waste, na.rm = TRUE), .groups = 'drop')
+```
 
-# Combining the two summaries into a single data frame
+
+```{r new}
+
+#Combining the two summaries into a single data frame
 comparison_data <- merge(total_production, total_food_waste, by = "Country")
 
-# Reshaping the data for plotting
+#Reshaping the data for plotting
 comparison_data_melted <- data.frame(
   Country = rep(comparison_data$Country, times = 2),
   Metric = c(rep("Total_Production", nrow(comparison_data)), rep("Total_Food_Waste", nrow(comparison_data))),
   Value = c(comparison_data$Total_Production, comparison_data$Total_Food_Waste)
 )
 
-# Plotting the comparative bar graph
+#Plotting the comparative bar graph
 ggplot(comparison_data_melted, aes(x = Country, y = Value, fill = Metric)) +
   geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Comparative Analysis of Production and Food Waste by Country",
+  labs(title = "Comparative Analysis of Production and Food Waste",
        x = "Country",
-       y = "Total Value") +
+       y = "Total Value (in tons)") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#Displaying the total food waste by country
+print(total_food_waste)
+
 ```
