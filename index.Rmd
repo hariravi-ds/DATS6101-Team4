@@ -376,11 +376,15 @@ ggplot(final_df, aes(x = Country, y = Production, fill = Country)) +
   theme(legend.position = "none")
 
 #qqplot
-iqr <- IQR(final_df$Production)
-lower_bound <- quantile(final_df$Production, 0.25) - 1.5 * iqr
-upper_bound <- quantile(final_df$Production, 0.75) + 1.5 * iqr
+log_df <- final_df %>%
+  filter(Production > 0) %>%
+  mutate(Production = log(Production))
 
-no_outliers <- final_df %>%
+iqr <- IQR(log_df$Production)
+lower_bound <- quantile(log_df$Production, 0.25) - 1.5 * iqr
+upper_bound <- quantile(log_df$Production, 0.75) + 1.5 * iqr
+
+no_outliers <- log_df %>%
   filter(Production >= lower_bound, Production <= upper_bound)
 
 qqnorm(no_outliers$Production, main = "Production QQ Plot")
@@ -396,9 +400,9 @@ t_test_covid <- t.test(pre_covid$Production, post_covid$Production)
 print(t_test_covid)
 ```
 ```{r}
-# Filter data for the last five years
+# Filter data for the last ten years
 recent_data <- data %>%
-  filter(Year >= max(Year) - 4)
+  filter(Year >= max(Year) - 9)
 
 recent_data <- recent_data %>%
   mutate(High_Producer = ifelse(Production > 25000000, "Yes", "No"))
@@ -411,7 +415,7 @@ consistent_high_producers <- recent_data %>%
   summarise(avg_production = mean(Production)) %>%
   arrange(desc(avg_production))
 
-# Calculate the production threshold for the top quartile over the last five years
+# Calculate the production threshold for the top quartile over the last ten years
 top_quartile_threshold <- recent_data %>%
   summarize(Top_Quartile = quantile(Production, 0.75)) %>%
   pull(Top_Quartile)
@@ -421,11 +425,11 @@ top_quartile_countries <- consistent_high_producers %>%
   filter(avg_production >= top_quartile_threshold)
 
 # Print results
-cat("Countries consistently producing over 25 million tons in the last five years:\n")
+cat("Countries consistently producing over 25 million tons in the last ten years:\n")
 print(top_quartile_countries)
 ```
 ```{r}
-# Calculate improvement over the last five years for these countries
+# Calculate improvement over the last ten years for these countries
 improvement_data <- recent_data %>%
   filter(Country %in% top_quartile_countries$Country) %>%
   group_by(Country) %>%
@@ -477,8 +481,6 @@ high_producers <- recent_data %>%
 
 non_high_producers <- recent_data %>%
   filter(!Country %in% consistent_high_producers$Country)
-
-print(consistent_high_producers)
 ```
 ```{r}
 # Boxplot for production per capita
@@ -516,7 +518,7 @@ ggplot(recent_data,
          color = Country
        )) +
   geom_line() +
-  labs(title = "Rice Production Over the Last Five Years", x = "Year", y = "Production (in tons)") +
+  labs(title = "Rice Production Over the Last Ten Years", x = "Year", y = "Production (in tons)") +
   theme_minimal() +
   theme(legend.position = "none")
 
@@ -529,7 +531,7 @@ ggplot(improvement_data,
        )) +
   geom_bar(stat = "identity") +
   coord_flip() +
-  labs(title = "Improvement in Rice Production Over the Last Five Years", x = "Country", y = "Change in Production (in tons)") +
+  labs(title = "Improvement in Rice Production Over the Last Ten Years", x = "Country", y = "Change in Production (in tons)") +
   theme_minimal()
 
 # Create a summary of average production by category
