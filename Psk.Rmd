@@ -223,6 +223,15 @@ decade_results <- combined_data %>%
 print(decade_results)
 
 ```
+```{r supply}
+average_supply_chain_waste <- filtered_data %>%
+  group_by(Country) %>%
+  summarise(Average_Supply_Chain_Waste = mean(Supply_Chain_Waste_t, na.rm = TRUE), .groups = 'drop') %>%
+  arrange(desc(Average_Supply_Chain_Waste))  # Arrange in descending order
+
+# Display the results
+print(average_supply_chain_waste)
+```
 
 
 
@@ -312,21 +321,8 @@ correlation_matrix <- filtered_data %>%
 
 correlation_results <- cor(correlation_matrix, use = "complete.obs")
 print(correlation_results)
-
-
-correlation_melted <- melt(correlation_results)
-
-#correlation heatmap
-ggplot(data = correlation_melted, aes(Var1, Var2, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient2(low = "blue", high = "skyblue", mid = "white", 
-                       midpoint = 0, limit = c(-1, 1), 
-                       name="Correlation") +
-  theme_minimal() +
-  labs(title = "Correlation Heatmap", x = "", y = "") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
 ```
+
 
 ```{r  sum_dom}
 domestic_supply_summary <- filtered_data %>%
@@ -345,6 +341,7 @@ print(domestic_supply_summary)
 ```{r anov}
 # Performing ANOVA to compare average domestic supply across countries
 anova_result <- aov(Average_Domestic_Supply ~ Country, data = domestic_supply_summary)
+
 
 # Displaying the ANOVA results
 summary(anova_result)
@@ -443,5 +440,45 @@ ggplot(comparison_data_melted, aes(x = Country, y = Value, fill = Metric)) +
 
 #Displaying the total food waste by country
 print(total_food_waste)
+
+```
+```{r chi}
+#Chi-Square test for average supply chain waste and total food waste
+
+average_supply_chain_waste <- data.frame(
+  Country = c("China", "India", "Vietnam", "Indonesia", "Thailand", "Bangladesh", "Myanmar"),
+  Average_Supply_Chain_Waste = c(7448683, 2873244, 2849080, 2623317, 1406286, 1334844, 938625)
+)
+
+total_food_waste <- data.frame(
+  Country = c("China", "India", "Indonesia", "Thailand", "Vietnam", "Bangladesh", "Myanmar"),
+  Total_Food_Waste = c(1613301920, 1277946270, 327764644, 297933622, 259794292, 165710250, 66361258)
+)
+
+
+average_supply_chain_waste <- average_supply_chain_waste %>%
+  mutate(Supply_Chain_Category = case_when(
+    Average_Supply_Chain_Waste < 1500000 ~ "Low",
+    Average_Supply_Chain_Waste < 3000000 ~ "Medium",
+    TRUE ~ "High"
+  ))
+
+total_food_waste <- total_food_waste %>%
+  mutate(Food_Waste_Category = case_when(
+    Total_Food_Waste < 500000000 ~ "Low",
+    Total_Food_Waste < 1500000000 ~ "Medium",
+    TRUE ~ "High"
+  ))
+
+
+merged_data <- merge(average_supply_chain_waste, total_food_waste, by = "Country")
+
+#Create a contingency table
+contingency_table <- table(merged_data$Supply_Chain_Category, merged_data$Food_Waste_Category)
+
+
+chi_square_result <- chisq.test(contingency_table)
+
+print(chi_square_result)
 
 ```

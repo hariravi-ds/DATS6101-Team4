@@ -1,0 +1,99 @@
+---
+title: "Rice Production"
+author: "Pranjal Wakpaijan"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+  code_folding: hide
+number_sections: false
+toc: yesgit checkout NW
+toc_float: yes
+pdf_document:
+  toc: yes
+toc_depth: '3'
+---
+
+We explored global rice production trends from 1980 to 2020, focusing on the top ten and least ten rice-producing countries. By analysing the average supply chain waste and production levels, this study reveals critical insights into efficiency and waste generation. Furthermore, it evaluates statistical relationships through various tests, providing implications for food security and international trade.
+
+
+We explored global rice production trends from 1980 to 2020, focusing on the top ten and least ten rice-producing countries. By analysing the average supply chain waste and production levels, this study reveals critical insights into efficiency and waste generation. Furthermore, it evaluates statistical relationships through various tests, providing implications for food security and international trade.
+Methodology
+
+Selection of Countries
+
+The analysis focuses on the top ten and least ten rice-producing countries from 1980 to 2020, selected based on their average rice production volumes during this period.
+
+Waste to Production Ratio
+Waste to Production Ratio=Total Waste/ Total Production
+Country
+
+Average Waste to Production Ratio
+Vietnam	0.07356085
+Indonesia	0.05286881
+Thailand	0.04459439
+China	0.04002320
+Myanmar	0.03338458
+Bangladesh	0.03111806
+India	0.02146692
+
+A Welch Two Sample t-test was performed to compare the average supply chain waste between India and Vietnam, yielding a p-value < 2.2e-16, indicating a statistically significant difference between the two means.
+Statistical Analysis
+The t-test results yielded the following:
+•	t-value: -23.105
+•	Degrees of Freedom (df): 56.559
+•	p-value: < 2.2e-16
+•	Confidence Interval: [-0.05905936, -0.04963735]
+•	Means: Mean of x (India) = 0.02099588; Mean of y (Vietnam) = 0.07534424
+The data indicates that countries with a lower waste-to-production ratio exhibit more efficient production systems.
+ 
+
+Average Domestic Supply
+The bar chart illustrates that China and India are the major rice producers, while other countries produce significantly less. The significant disparity between total production and average domestic supply across all countries indicates that rice is an important export commodity for these nations.
+
+Country	Total Production
+	Average Domestic Supply	
+China	7657264920	139965049	
+India	5243300270	93842707	
+Indonesia	2033059644	38969244	
+Bangladesh	1286665250	33695000	
+Vietnam	946258292	24609480	
+Thailand	665942622	16117952	
+Myanmar	457041258	23478875	
+
+Understanding this relationship is crucial for assessing a country's capacity to meet its rice needs, as it helps identify potential shortages or surpluses. 
+
+This analysis can further help determine trade relation between countries and helps identify potential export markets for rice-producing countries and import sources for rice-consuming countries.
+An ANOVA test was performed to compare average domestic supply across countries. The results are as follows:
+
+Degrees of Freedom (Df): 6
+Sum of Squares (Sum Sq): 1.284e+16
+Mean Squares (Mean Sq): 2.14e+15
+
+The ANOVA test results indicate significant variability in average domestic supply across countries. The high sum of squares and mean squares values suggest that the differences in domestic supply are substantial. This variability reflects the diverse agricultural practices, technology adoption, and resource availability among the countries analysed.
+
+Total Food Waste
+
+Food waste was calculated using the formula:
+Food Waste=Total Production−Domestic Supply−Supply Chain Waste. 
+
+Notably, higher food production often correlates with increased food waste. For instance, from 1980 to 2020, China wasted approximately 1.6 billion tons of rice, accounting for 10% of its total production. This finding underscores the dual challenge of being a leading producer and managing substantial waste.
+ 
+Chi-Square Test
+A Chi-Square test was conducted to evaluate the relationship between average supply chain waste and total food waste, yielding the following results:
+•	X-squared: 8.4
+•	Degrees of Freedom (df): 4
+•	p-value: 0.07798
+The additional food waste types could provide a more comprehensive framework for understanding food waste dynamics. This, in turn, might justify further analysis and potentially yield different insights than those derived from the current Chi-Square test focusing only on supply chain waste.
+
+
+Limitations
+
+The data primarily reflects trends over specific time frames. Fluctuations due to unforeseen events, such as climate change or economic crises, may not be fully captured in this analysis.
+
+Differences in technology adoption and agricultural practices across countries may skew results, as some countries may have access to advanced techniques while others rely on traditional methods.
+
+
+Conclusion
+This study on global rice production from 1980 to 2020 highlights significant insights into production efficiency, waste management, and domestic supply among major rice-producing countries. The analysis reveals substantial differences in efficiency, with countries like India exhibiting lower waste-to-production ratios compared to Vietnam. China and India are identified as dominant producers, with a notable gap between their production levels and those of other nations, emphasizing rice's role as an export commodity. Additionally, higher production levels correlate with increased food waste, as evidenced by China's waste of approximately 1.6 billion tons of rice (10% of its total production). Statistical analyses confirm significant differences in supply chain waste and domestic supply across countries, reflecting diverse agricultural practices and resource availability. These findings underscore the need for improved waste management strategies and provide insights for assessing food security and trade relationships, while acknowledging limitations such as data gaps and short-term fluctuations.
+
+  
