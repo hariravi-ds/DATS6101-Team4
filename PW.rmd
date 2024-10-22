@@ -28,6 +28,7 @@ rice_prod <- read.csv("C:\\Users\\HP\\Downloads\\Rice Production Data (2).csv")
 head(rice_prod)
 xkabledplyhead(rice_prod, title = "Rice Production")
 ```
+We explored global rice production trends from 1980 to 2020, focusing on the top ten and least ten rice-producing countries. By analysing the average supply chain waste and production levels, this study reveals critical insights into efficiency and waste generation. Furthermore, we evaluated statistical relationships through various tests, providing implications for food security and international trade.
 
 ```{r modify}
 
@@ -188,6 +189,18 @@ ggplot(combined_data, aes(x = Year, y = Production, color = Country, linetype = 
   theme(legend.position = "bottom")
 
 ```
+The graph shows the rice production trends of the top and least producing countries from 1980 to 2020.
+
+China and India are the top producers, with China consistently exceeding 150 million tonnes since 1985.Both countries peaked around 200 million tonnes in 2015.
+
+Vietnam, Thailand, Myanmar, Indonesia, Bangladesh, and 6 other unnamed countries are among the least 10 producers in 2020.
+
+Vietnam saw the largest increase in rice production, reaching nearly 45 million tonnes by 2020.
+
+Indonesia, despite starting with higher production, has lagged behind, reaching around 35 million tonnes.
+
+
+
 ```{r hl}
 
 # Create a decade column
@@ -236,7 +249,7 @@ descriptive_stats <- cleaned_data %>%
 descriptive_stats_df <- as.data.frame(do.call(rbind, descriptive_stats))
 descriptive_stats
 ```
-
+We Calculated Average Waste to Production Ratio with the formula Total Waste/ Total Production
 ```{r ratio}
 # Calculate supply chain waste to production ratio
 ratio_data <- filtered_data %>%
@@ -260,10 +273,16 @@ average_ratio <- ratio_data %>%
   arrange(desc(Average_Ratio))  
 
 print(average_ratio)
-
-# The countries with lowest average ratio indicate more efficient production systems
-
 ```
+A Welch Two Sample t-test was performed to compare the average supply chain waste between India and Vietnam, yielding a p-value < 2.2e-16, indicating a statistically significant difference between the two means.
+Statistical Analysis
+The t-test results yielded the following:
+•	t-value: -23.105
+•	Degrees of Freedom (df): 56.559
+•	p-value: < 2.2e-16
+•	Confidence Interval: [-0.05905936, -0.04963735]
+•	Means: Mean of x (India) = 0.02099588; Mean of y (Vietnam) = 0.07534424
+The data indicates that countries with a lower waste-to-production ratio exhibit more efficient production systems.
 ```{r tt}
 # Extracting data for India and Vietnam
 country_data_1 <- average_ratio %>% filter(Country == "India")
@@ -285,6 +304,7 @@ t_test_result <- t.test(india_samples, vietnam_samples)
 # Displaying the t-test results
 print(t_test_result)
 ```
+
 ```{r waste}
 
 ggplot(average_ratio, aes(x = reorder(Country, Average_Ratio), y = Average_Ratio)) +
@@ -297,9 +317,8 @@ ggplot(average_ratio, aes(x = reorder(Country, Average_Ratio), y = Average_Ratio
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-
-
-
+Average Domestic Supply
+The bar chart illustrates that China and India are the major rice producers, while other countries produce significantly less. The significant disparity between total production and average domestic supply across all countries indicates that rice is an important export commodity for these nations.
 
 
 ```{r  sum_dom}
@@ -316,6 +335,8 @@ domestic_supply_summary <- filtered_data %>%
 print(domestic_supply_summary)
 
 ```
+An ANOVA test was performed to compare average domestic supply across countries.
+
 ```{r anov}
 # Performing ANOVA to compare average domestic supply across countries
 anova_result <- aov(Average_Domestic_Supply ~ Country, data = domestic_supply_summary)
@@ -324,6 +345,7 @@ anova_result <- aov(Average_Domestic_Supply ~ Country, data = domestic_supply_su
 # Displaying the ANOVA results
 summary(anova_result)
 ```
+The ANOVA test results indicate significant variability in average domestic supply across countries. The high sum of squares and mean squares values suggest that the differences in domestic supply are substantial. This variability reflects the diverse agricultural practices, technology adoption, and resource availability among the countries analysed.
 
 ```{r de}
 # Arranging countries based on average domestic supply in descending order
@@ -354,6 +376,10 @@ ggplot(comparison_plot_data, aes(x = Country, y = Value, fill = Metric)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ```
+Total Food Waste
+
+Food waste was calculated using the formula:
+Food Waste=Total Production−Domestic Supply−Supply Chain Waste. 
 
 
 ```{r arrange}
@@ -368,7 +394,8 @@ total_food_waste <- filtered_data %>%
 print(total_food_waste)
 
 ```
-
+Notably, higher food production often correlates with increased food waste. For instance, from 1980 to 2020, China wasted approximately 1.6 billion tons of rice, accounting for 10% of its total production. This finding underscores the dual challenge of being a leading producer and managing substantial waste.
+ 
 ```{r fwgraph}
 #Plot the graph
 ggplot(total_food_waste, aes(x = Country, y = Total_Food_Waste, fill = Country)) +
@@ -419,6 +446,11 @@ ggplot(comparison_data_melted, aes(x = Country, y = Value, fill = Metric)) +
 
 
 ```
+Chi-Square Test
+A Chi-Square test was conducted to evaluate the relationship between average supply chain waste and total food waste, yielding the following results:
+•	X-squared: 8.4
+•	Degrees of Freedom (df): 4
+•	p-value: 0.07798
 
 ```{r chi}
 average_supply_chain_waste <- average_supply_chain_waste %>%
@@ -439,21 +471,8 @@ total_food_waste <- total_food_waste %>%
 merged_data <- merge(average_supply_chain_waste, total_food_waste, by = "Country")
 merged_data
 ```
-```{r cont}
 
-#Chi-Square test for average supply chain waste and total food waste
-
-average_supply_chain_waste <- data.frame(
-  Country = c("China", "India", "Vietnam", "Indonesia", "Thailand", "Bangladesh", "Myanmar"),
-  Average_Supply_Chain_Waste = c(7448683, 2873244, 2849080, 2623317, 1406286, 1334844, 938625)
-)
-
-total_food_waste <- data.frame(
-  Country = c("China", "India", "Indonesia", "Thailand", "Vietnam", "Bangladesh", "Myanmar"),
-  Total_Food_Waste = c(1613301920, 1277946270, 327764644, 297933622, 259794292, 165710250, 66361258)
-)
-
-
+```{r chi-sq}
 #Create a contingency table
 contingency_table <- table(merged_data$Supply_Chain_Category, merged_data$Food_Waste_Category)
 
@@ -463,3 +482,4 @@ chi_square_result <- chisq.test(contingency_table)
 print(chi_square_result)
 
 ```
+The additional food waste types could provide a more comprehensive framework for understanding food waste dynamics. This, in turn, might justify further analysis and potentially yield different insights than those derived from the current Chi-Square test focusing only on supply chain waste.
