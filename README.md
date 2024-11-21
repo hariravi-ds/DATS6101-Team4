@@ -1,4 +1,4 @@
-## Rice Production Data
+# Rice Production Data
 
 ### Overview
 This repository contains the dataset for the project titled **"Global Rice Production Analysis."** Predicting rice production outcomes is vital for global food security and agricultural sustainability. This dataset, “Explore Data on Agricultural Production,” includes approximately 13,500 rows and 40 columns, focusing on factors influencing rice yield, such as land area, climatic conditions, and waste generation.
