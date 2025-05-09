@@ -1,0 +1,292 @@
+---
+title: "Rice Production"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    number_sections: false
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+---
+
+```{r libraries}
+library(ezids)
+library(tidyverse)
+```
+
+```{r data}
+#load the dataset
+rice_prod <- read.csv("Rice Production Data.csv")
+
+#display top six rows of the dataset
+head(rice_prod)
+
+xkabledplyhead(rice_prod, title = "Rice Production")
+```
+
+```{r}
+#display the shape of dataset
+dim(rice_prod)
+```
+
+```{r col}
+#display the column names of dataset
+colnames(rice_prod)
+```
+
+```{r modify}
+
+#defining name_map to rename the columns
+name_map <- c(
+  "Production..t." = "Production",
+  "production__tonnes__per_capita" = "Production_per_capita(kg)",
+  "Production.per.capita..kg." = "Production_per_capita(kg)",
+  "Yield..t.ha." = "Yield(t/ha)",
+  "Land.Use..ha." = "Land_Use",
+  "area_harvested__ha__per_capita" = "Area_Harvested(ha_per_capita)",
+  "Land.Use.per.capita..m.." = "Land_Use_per_Capita",
+  "Imports..t." = "Imports(t)",
+  "imports__tonnes__per_capita" = "Imports(t_per_capita)",
+  "Imports.per.capita..kg." = "Imports_per_capita(kg)",
+  "Exports..t." = "Exports(t)",
+  "exports__tonnes__per_capita" = "Exports(t_per_capita)",
+  "Exports.per.capita..kg." = "Exports_per_capita(kg)",
+  "Domestic.supply..t." = "Domestic_Supply(t)",
+  "domestic_supply__tonnes__per_capita" = "Domestic_Supply(t_per_capita)",
+  "Domestic.supply.per.capita..kg." = "Domestic_Supply_per_Capita(kg)",
+  "Food..t." = "Food(t)",
+  "food__tonnes__per_capita" = "Food(t_per_capita)",
+  "Food.per.capita..kg." = "Food_per_Capita(kg)",
+  "Animal.feed..t." = "Animal_Feed(t)",
+  "feed__tonnes__per_capita" = "Animal_Feed(t_per_capita)",
+  "Animal.feed.per.capita..kg." = "Animal_Feed_per_Capita(kg)",
+  "Other.uses..t." = "Other_Uses(t)",
+  "other_uses__tonnes__per_capita" = "Other_Uses(t_per_capita)",
+  "Other.uses.per.capita..kg." = "Other_uses_per_capita(kg)",
+  "Supply.chain.waste..t." = "Supply_Chain_Waste(t)",
+  "waste_in_supply_chain__tonnes__per_capita" = "Waste_in_supply_chain(t_per_capita)",
+  "Supply.chain.waste.per.capita..kg." = "Supply_chain_waste_per_Capita(kg)",
+  "Food.supply..kg.per.capita.per.year." = "Food_supply(kg_per_capita_per_day)",
+  "Food.supply..g.per.capita.per.day." = "Food_supply(g_per_capita_per_day)",
+  "Food.supply..kcal.per.capita.per.day." = "Food_supply(kcal_per_capita_per_day)",
+  "Food.supply..Protein.g.per.capita.per.day." = "Food_supply(Protein_per_capita_per_day)",
+  "Food.supply..Fat.g.per.capita.per.day." = "Food_supply(Fat_per_capita_per_day)"
+)
+
+#rename the columns based on name_map
+for (old_name in colnames(rice_prod)) {
+  if (old_name %in% names(name_map)) {
+    colnames(rice_prod)[colnames(rice_prod) == old_name] <- name_map[old_name]
+  }
+}
+
+#display the changed column names
+colnames(rice_prod)
+```
+
+
+```{r trade_data}
+#Data for import and export
+rice_trade <- rice_prod %>%
+  select(Country,
+         Year,
+         Population,
+         Production,
+         `Imports(t)`,
+         `Imports(t_per_capita)`,
+         `Exports(t)`,
+         `Exports(t_per_capita)`)
+
+#From 1980, but keep 1979 for growth analysis
+rice_trade <- rice_trade %>%
+  filter(Year >= 1979)
+
+#Remove 2022 as no records for all countries
+rice_trade <- rice_trade %>%
+  filter(Year != 2022)
+```
+
+```{r countries}
+#Making flag for countries and regions
+rice_trade <- rice_trade %>%
+  mutate(area_type = case_when(
+    str_detect(Country, "FAO") ~ "Region",
+    str_detect(Country, "(?i)countries") ~ "Region",
+    str_detect(Country, "European Union") ~ "Region",
+    str_detect(Country, "World") ~ "World",
+    Country %in% c("North America", "South America",
+                   "Asia", "Africa", "Europe",
+                   "Oceania", "Antarctica") ~ "Continent",
+    TRUE ~ "Country"
+  ))
+```
+
+
+```{r percent_exported}
+#Calculating percentage of production exported
+rice_trade <- rice_trade %>%
+  mutate(percent_exported = ifelse(!is.na(Production), `Exports(t)` / Production * 100, NA
+  ))
+
+```
+
+```{r basic_stats}
+rice_trade_country <- rice_trade %>%
+  filter(area_type == "Country")
+xkablesummary(rice_trade_country)
+
+```
+
+```{r globaltrend}
+#### Global export and percentage line graph ####
+rice_trade %>%
+  filter(Country == "World") %>%
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = `Imports(t)`), color = "steelblue", size = 1) +
+  geom_line(aes(y = `Exports(t)`), color = "darkred",
+            size = 1) +
+  labs(x = "Year",
+       y = "Amount (t)") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma)  # Handle large exponential values in y-axis
+```
+
+
+```{r top_traders}
+#### Bar and line graphs for top importers and exporters ####
+# Top exporters
+  # Sum total imports and exports for each country
+top_trade_countries <- rice_trade %>%
+  filter(area_type == "Country") %>%
+  group_by(Country) %>%
+  summarise(total_import = sum(`Imports(t)`, na.rm = TRUE),
+            total_export = sum(`Exports(t)`, na.rm = TRUE)) %>%
+  arrange(desc(total_import), desc(total_export))
+
+# Select top 5 importers and exporters
+top_5_importers <- top_trade_countries %>%
+  arrange(desc(total_import)) %>%
+  slice(1:5) %>%
+  pull(Country)
+
+top_5_exporters <- top_trade_countries %>%
+  arrange(desc(total_export)) %>%
+  slice(1:5) %>%
+  pull(Country)
+
+# Filter the original data for the top 5 importers and exporters
+top_rice_trade <- rice_trade %>%
+  filter(Country %in% c(top_5_importers, top_5_exporters))
+
+
+```
+
+```{r top_trader_bar}
+# Create bar graph for total imports (top 5 importers)
+top_rice_trade %>%
+  filter(Country %in% top_5_importers) %>%
+  ggplot(aes(x = reorder(Country,`Imports(t)`), y = `Imports(t)`)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(x = "Country",
+       y = "Imports (t)") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma)
+
+# Create bar graph for total exports (top 5 exporters)
+top_rice_trade %>%
+  filter(Country %in% top_5_exporters) %>%
+  ggplot(aes(x = reorder(Country, `Exports(t)`), y = `Exports(t)`)) +
+  geom_bar(stat = "identity", fill = "darkred") +
+  coord_flip() +
+  labs(x = "Country",
+       y = "Exports (t)") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma)
+```
+
+```{r top_trader_line}
+# Line graph for imports over time for top 5 importers
+top_rice_trade %>%
+  filter(Country %in% top_5_importers) %>%
+  ggplot(aes(x = Year, y = `Imports(t)`, color = Country)) +
+  geom_line(size = 1) +
+  labs(x = "Country",
+       y = "Imports (t)") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  scale_color_manual(values = c("steelblue", "orange", "magenta", "skyblue", "green"))
+
+# Line graph for exports over time for top 5 exporters
+top_rice_trade %>%
+  filter(Country %in% top_5_exporters) %>%
+  ggplot(aes(x = Year, y = `Exports(t)`, color = Country)) +
+  geom_line(size = 1) +
+  labs(x = "Country",
+       y = "Exports (t)") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  scale_color_manual(values = c("darkred", "orange", "magenta", "skyblue", "green"))
+```
+
+
+```{r net_trade}
+##### Net Importer or Exporter? #####
+net_trade <- rice_trade %>%
+  filter(!(is.na(`Imports(t_per_capita)`) &
+           is.na(`Exports(t_per_capita)`)))
+
+cleaned_net_trade <- net_trade %>%
+  mutate(`Imports(t)` = replace_na(`Imports(t)`, 0),
+         `Exports(t)` = replace_na(`Exports(t)`, 0),
+         `Imports(t_per_capita)` =
+           replace_na(`Imports(t_per_capita)`, 0),
+         `Exports(t_per_capita)` =
+           replace_na(`Exports(t_per_capita)`, 0)) %>%
+  filter(area_type == "Country")
+  
+cleaned_net_trade <- cleaned_net_trade %>% mutate(net_status_per_capita = ifelse(`Imports(t_per_capita)` > `Exports(t_per_capita)`, "Net Importer", ifelse(`Exports(t_per_capita)` > `Imports(t_per_capita)`, "Net Exporter", "Other")))
+```
+
+
+```{r ttest_importer_and_exporter}
+cleaned_net_trade$log_production <- log(cleaned_net_trade$Production + 1)
+importers <- cleaned_net_trade %>%
+  filter(net_status_per_capita == "Net Importer")
+exporters <- cleaned_net_trade %>%
+  filter(net_status_per_capita == "Net Exporter")
+
+# Perform t-test on log-transformed production data
+t_test_result <- t.test(importers$log_production, exporters$log_production)
+
+# Print the t-test result
+t_test_result
+
+```
+
+```{r ttest_post2008}
+# Log-transform the export data to handle skewness
+cleaned_net_trade$log_export <- log(cleaned_net_trade$`Exports(t)` + 1)
+
+# Filter data into two groups: before 2008 and after 2010
+export_before_2008 <- cleaned_net_trade %>% filter(Year < 2008) %>% pull(log_export)
+export_after_2010 <- cleaned_net_trade %>% filter(Year > 2010) %>% pull(log_export)
+
+# Perform a t-test to compare exports before 2008 vs after 2010
+t_test_export <- t.test(export_before_2008, export_after_2010)
+
+# Print the t-test result
+print(t_test_export)
+```
+
+
+
+
+
+

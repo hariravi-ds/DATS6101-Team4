@@ -1,0 +1,407 @@
+---
+title: "Import and Export"
+author: "Jin Hyuk Son"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    number_sections: false
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+# Some of common RMD options (and the defaults) are: 
+# include=T, eval=T, echo=T, results='hide'/'asis'/'markup',..., collapse=F, warning=T, message=T, error=T, cache=T, fig.width=6, fig.height=4, fig.dim=c(6,4) #inches, fig.align='left'/'center','right', 
+knitr::opts_chunk$set(warning = F, message = F)
+# Can globally set option for number display format.
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+```
+
+```{r load libraries}
+library(ezids)
+library(tidyverse)
+library(zoo)
+```
+
+### Data Description
+
+```{r import_data}
+rice_df <- read.csv("Rice Production Data.csv")
+```
+
+The dataset consists of global rice production records from 1960 to 2022. Each observation represents a country for a specific year, including annual rice production, population, and other relevant metrics. The data has `r nrow(rice_df)` observations and `r ncol(rice_df)` variables. The information is provided from Our World in Data's article "Agricultural Production: How much, and what types of food, do countries produce across the world?"
+
+Of the 36 variables included in the dataset, we will be using 9 variables in our project: Country, Year, Production(t), Population, Land Use, Import(t), Export(t), Domestic Supply(t), and Supply Chain Waste(t). The names of the variables were modified for better comprehensibility.
+
+Displaying the first few observations:
+
+```{r data_head}
+rice_df_clean <- rice_df %>%
+  select(Country, Year, Population,
+         Production..t., Land.Use..ha.,
+         Imports..t., Exports..t.,
+         Domestic.supply..t., Supply.chain.waste..t.) %>%
+  rename("Production" = "Production..t.",
+         "Land_Use" = "Land.Use..ha.",
+         "Imports(t)" = "Imports..t.",
+         "Exports(t)" = "Exports..t.",
+         "Domestic_Supply(t)" = "Domestic.supply..t.",
+         "Supply_Chain_Waste(t)" = "Supply.chain.waste..t.")
+xkabledplyhead(rice_df_clean, 3)
+
+```
+
+Displaying the summary of the dataset
+
+```{r data_summary}
+summary(rice_df_clean)
+```
+
+The timeline for the project will be 1980 to 2022. The Country variable consists of individual countries, Food and Agricultural Organizations of UN (FAO), continents, and the global total. We have created a categorical variable to identify countries.
+
+```{r data_cleaning}
+rice_df_clean <- rice_df_clean %>%
+  filter(Year >= 1980) %>%
+  mutate(area_type = case_when(
+    str_detect(Country, "FAO") ~ "Region",
+    str_detect(Country, "(?i)countries") ~ "Region",
+    str_detect(Country, "European Union") ~ "Region",
+    str_detect(Country, "World") ~ "World",
+    Country %in% c("North America", "South America",
+                   "Asia", "Africa", "Europe",
+                   "Oceania", "Antarctica", "Melanesia") ~ "Continent",
+    TRUE ~ "Country"
+  ))
+```
+
+### **Research Question 1**
+
+Was there a notable change in the global rice trade trend in the last 20 years, specifically in terms of export percentages and import dependency? How did this change impact different regions and countries of varying population sizes, and what does it reveal about the changes in rice production and trade?
+
+```{r trade_data}
+#Select columns of interest and clean NAs
+trade_df <- rice_df_clean %>%
+  select(Country, Year, Population,
+         Production, `Imports(t)`, `Exports(t)`,
+         area_type) %>%
+  filter(Year >= 1980 & Year < 2022) #2021 the most recent data
+#data cleaning
+#if all production values is NA, set to 0
+trade_df_cleaned <- trade_df %>%
+  mutate(Production = if_else(
+    Country %in%
+      (
+        trade_df %>%
+          group_by(Country) %>%
+          summarize(
+            all_zero_or_na = all(is.na(Production) |
+                                   Production == 0),
+            .groups = 'drop'
+          ) %>%
+          filter(all_zero_or_na) %>%
+          pull(Country)
+      ),
+    0,
+    Production
+  ))
+
+#if all import values is NA, set to 0
+trade_df_cleaned <- trade_df_cleaned %>%
+  mutate(`Imports(t)` = if_else(
+    Country %in%
+      (
+        trade_df_cleaned %>%
+          group_by(Country) %>%
+          summarize(
+            all_zero_or_na = all(is.na(`Imports(t)`) |
+                                   `Imports(t)` == 0),
+            .groups = 'drop'
+          ) %>%
+          filter(all_zero_or_na) %>%
+          pull(Country)
+      ),
+    0,
+    `Imports(t)`
+  ))
+#if all import values is NA, set to 0
+trade_df_cleaned <- trade_df_cleaned %>%
+  mutate(`Exports(t)` = if_else(
+    Country %in%
+      (
+        trade_df_cleaned %>%
+          group_by(Country) %>%
+          summarize(
+            all_zero_or_na = all(is.na(`Exports(t)`) |
+                                   `Exports(t)` == 0),
+            .groups = 'drop'
+          ) %>%
+          filter(all_zero_or_na) %>%
+          pull(Country)
+      ),
+    0,
+    `Exports(t)`
+  ))
+
+# Calculate growth rates
+population_data <- trade_df_cleaned %>%
+  mutate(GrowthRate = (Population - lag(Population)) / lag(Population))
+
+#calculating mean growth rate
+average_growth_rate <- mean(population_data$GrowthRate, na.rm = TRUE)
+
+#function to impute data based on calcualted growth rate
+impute_population <- function(data, avg_growth) {
+  for (i in 1:nrow(data)) {
+    if (is.na(data$Population[i])) {
+      previous_population <- data$Population[i - 1]  # Last known population
+      data$Population[i] <- previous_population * (1 + avg_growth)  # Impute using growth rate
+    }
+  }
+  return(data)
+}
+
+# Impute missing values
+population_data <- impute_population(population_data, average_growth_rate)
+
+#group by data to mutate the Import and Export for specific countries
+population_data <- population_data %>%
+  group_by(Country) %>%
+  mutate(`Imports(t)` = na.approx(`Imports(t)`, na.rm = FALSE),
+         `Exports(t)` = na.approx(`Exports(t)`, na.rm = FALSE)) %>%
+  ungroup()
+
+#fill in missing values in the Import and Export columns using interpolation
+population_data$`Imports(t)` <- na.approx(population_data$`Imports(t)`, na.rm = FALSE)
+population_data$`Exports(t)` <- na.approx(population_data$`Exports(t)`, na.rm = FALSE)
+
+final_trade_df <- population_data %>%
+  filter(!is.na(`Exports(t)`)) %>%
+  select(-GrowthRate)
+
+```
+
+#### **Methods**
+
+To conduct analysis on the research question, we have made the following additions to the dataset.
+
+-   **Percent Exported**. We have divided the export volume by production to analyze the growth of the global rice market.
+
+```{r percent_exported}
+#Exported percentage
+final_trade_df <- final_trade_df %>%
+  mutate(`Percent Exported` = `Exports(t)` / Production * 100) %>%
+  filter(!is.infinite(`Percent Exported`) & !is.na(`Percent Exported`))
+```
+
+-   **Import Dependency Ratio (IDR)**. The Food and Agriculture Organization of the United Nations defines IDR as imports x 100/(production + imports - exports). A higher IDR indicates a greater reliance on imports for rice. We have categorized IDR as follows:
+
+    -   Very High: 50 or greater
+
+    -   High: 40-49
+
+    -   Medium: 30-39
+
+    -   Low: 20-29
+
+    -   Very Low: Below 20
+
+```{r IDR}
+#Import dependency ratio
+final_trade_df <- final_trade_df %>%
+  mutate(IDR = `Imports(t)` * 100 /
+           (Production + `Imports(t)` - `Exports(t)`)) %>%
+  filter(!is.infinite(IDR) & !is.na(IDR))
+
+#Giving tags for IDR and Population
+##IDR
+final_trade_df <- final_trade_df %>%
+  mutate(`IDR Category` = case_when(
+    IDR >= 50 ~ "Very High",
+    IDR >= 40 ~ "High",
+    IDR >= 30 ~ "Medium",
+    IDR >= 20 ~ "Low",
+    TRUE ~ "Very Low"
+  ))
+final_trade_df$`IDR Category` <-
+  factor(final_trade_df$`IDR Category`,
+         levels = c("Very Low", "Low",
+                    "Medium", "High", "Very High"))
+```
+
+-   **Population Category**. Countries have been categorized based on their population size as follows:
+
+    -   Small: Less than 10 million
+
+    -   Medium: 10 million to 50 million
+
+    -   Large: 50 million to 100 million
+
+    -   Very Large: More than 100 million
+
+```{r population_category}
+##Population
+final_trade_df <- final_trade_df %>%
+  mutate(`Population Category` = case_when(
+    Population < 10000000 ~ "Small",
+    Population < 50000000 ~ "Medium",
+    Population < 100000000 ~ "Large",
+    TRUE ~ "Very Large"
+  ))
+final_trade_df$`Population Category` <-
+  factor(final_trade_df$`Population Category`,
+         levels = c("Small", "Medium", "Large"))
+```
+
+-   **Region**. The continent to which each country belongs has been identified using the “countrycode” package.
+
+```{r Region}
+#Add region for each country
+library(countrycode)
+final_trade_df$Continent <- countrycode(sourcevar =
+                                    final_trade_df$Country,
+                                  origin = "country.name",
+                                  destination = "continent")
+final_trade_df$Continent <- as.factor(final_trade_df$Continent)
+```
+
+-   **Log import.** Since the import variable is right-skewed, we applied a logarithmic transformation to achieve normality for hypothesis testing.
+
+```{r log_import}
+final_trade_df <- final_trade_df %>%
+  mutate(log_import = log(`Imports(t)` + 1))
+
+#histogram of log_import
+ggplot(data = final_trade_df, aes(log_import)) + 
+  geom_histogram(col="blue", 
+                 fill="aliceblue", 
+                 alpha = .7,
+                 bins = 30) +
+  labs(x="Log Import", y="Frequency") +
+  labs(title="Histogram of Log Import") +
+  theme_minimal()
+```
+
+Displaying the summary of the processed data:
+
+```{r trade_data_summary}
+summary(final_trade_df)
+```
+
+During the analysis, we will use two different statistical methods. A two-sample t-test will be conducted to compare the log means between observations from 2000s and 2010s. The chi-squared test will be used to assess the relationship between IDR and both population categories and regions.
+
+#### **Analysis**
+
+We began our analysis by looking at the overall import and export trend from 1980 to 2021. It was clear that there was a spike in the overall volume of rice trade near the end of 2000s.
+
+```{r}
+pivot_exported_per <- final_trade_df %>%
+  filter(Country == "World") %>%
+  select(Year, `Percent Exported`) %>%
+  filter(Year >= 2005 & Year <= 2015) %>%
+  pivot_wider(names_from = Year, values_from = `Percent Exported`)
+pivot_exported_per
+```
+
+When we see the trend in percentage of global rice production exported, we can clearly see there was a sudden rise, from 4.61% in 2009 to 7.36% in 2010 with continued increase. This raises the question; can we identify the 2000s and 2010s as two different phases of global rice trade trend?
+
+**Hypothesis Test for the Two Decades.**
+
+To determine if there surely was a significant change in rice trade pattern, we have conducted the two-sample t-test between observations made in 2000s and 2010s. The log import variable was used to compare the two decades.
+
+-   Null Hypothesis: There is no significant difference in the average log import between the 2000s and 2010s.
+
+-   Alternative Hypothesis: There is a significant difference in the average log import between the 2000s and 2010s.
+
+```{r import_ttest}
+#Divide into two decades
+trade_df_2000s <- final_trade_df %>%
+  filter(Year >= 2000 &
+           Year < 2010 &
+           area_type == "Country")
+    
+trade_df_2010s <- final_trade_df %>%
+  filter(Year >= 2010 &
+           Year < 2020 &
+           area_type == "Country")
+##T test
+trade_ttest <- t.test(trade_df_2000s$log_import, trade_df_2010s$log_import)
+```
+
+The test shows that the average log import volume for 2000s was 10.0 and that of 2010s was 10.5 with p-value of `r trade_ttest$p.value` at 95 percent confidence level. With p-value lower than 0.05, we can reject the null hypothesis that there is no significant difference between the two decades.
+
+**Chi-Squared Test of Independence for IDR**
+
+In addition to the t-test, we have conducted the chi-squared test between IDR and both population categories and regions for each decade to observe which type of countries were impacted by the changes in global trade trend.
+
+```{r IDR_Category}
+#Plot a barplot of IDR categories
+final_trade_df %>%
+  ggplot(aes(x = `IDR Category`)) +
+  geom_bar(fill = "aliceblue", color = "blue" ) +
+  labs(title = "Distribution by IDR Categories",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+The distribution by IDR categories indicates that the majority of countries fall into either the very low or very high import dependency categories, suggesting a polarization in global rice trade. Most countries are either self-sufficient or are heavily reliant on imports.
+
+-   **IDR and Regions**
+
+    We categorized countries based on their IDR and analyzed how these categories relate to the region or continent they belong to. The following are contingency tables for 2000s and 2010s.
+
+```{r idr_vs_regions}
+#Contingency table and Test for IDR vs Region
+#2000s
+IDR_Reg_2000s <- table(trade_df_2000s$Continent,
+                       trade_df_2000s$`IDR Category`)
+xkabledply(IDR_Reg_2000s, title = "Contingency table for IDR vs Regions in 2000s")
+
+chitest_IDR_Reg_2000s = chisq.test(IDR_Reg_2000s)
+#2010s
+IDR_Reg_2010s <- table(trade_df_2010s$Continent,
+                       trade_df_2010s$`IDR Category`)
+xkabledply(IDR_Reg_2010s, title = "Contingency table for IDR vs Regions in 2010s")
+
+chitest_IDR_Reg_2010s = chisq.test(IDR_Reg_2010s)
+```
+
+The p-value for test on 2000s is `r chitest_IDR_Reg_2000s$p.value` and the the p-value for test on 2010s is `r chitest_IDR_Reg_2010s$p.value` . The low p-values indicate an association between region and IDR category. Countries in Africa and Europe tend to be more reliant on rice imports, while countries in Asia and the Americas are more likely to be self-sufficient.
+
+From the contingency tables, we can also observe that in the 2010s, the number of observations in the "very high" import dependency category increased across all regions, while the opposite occurred for the "very low" import dependency category.
+
+-   **IDR and Population**
+
+    We categorized countries based on their population and conducted another Chi-squared test with IDR categories to evaluate how the two variables are related.
+
+```{r idr_vs_pop}
+#Contingency table and Test for IDR vs Population Category
+#2000s
+IDR_Pop_2000s <- table(trade_df_2000s$`Population Category`,
+                       trade_df_2000s$`IDR Category`)
+xkabledply(IDR_Pop_2000s, title = "Contingency table for IDR vs Population in 2000s")
+
+chitest_IDR_Pop_2000s = chisq.test(IDR_Pop_2000s)
+#2010s
+###Test for IDR vs Population
+IDR_Pop_2010s <- table(trade_df_2010s$`Population Category`,
+                       trade_df_2010s$`IDR Category`)
+xkabledply(IDR_Pop_2010s, title = "Contingency table for IDR vs Population in 2010s")
+
+chitest_IDR_Pop_2010s = chisq.test(IDR_Pop_2010s)
+```
+
+For the test on 2000s, the p-value is `r chitest_IDR_Pop_2000s$p.value` and the test on 2010s, p-value is `r chitest_IDR_Reg_2010s$p.value` . The results suggest there is an association between a country’s population size and its level of import dependency. The contingency tables show that the number of observations in "very low" import dependency category experienced significant decrease in small and medium population during the two decades.
+
+#### **Conclusion and Limitations**
+
+The analysis of global rice trade trends reveals a growing polarization in rice production and import dependency. Most countries are now either highly self-sufficient or heavily reliant on rice imports, with fewer nations falling in between. Between 2009 and 2010, there was significant shift in global rice trade trend. The results of the t-test confirm a meaningful difference in rice import volumes between the 2000s and 2010s, indicating that the global market underwent considerable changes during this period.
+
+In terms of production patterns, the 2010s saw a noticeable increase in records of high import dependency, without a corresponding rise in self-sufficiency. This suggests that an increasing number of countries are producing less rice, leading to a global market that is becoming more reliant on a smaller group of major rice producers. The chi-squared test further supports this finding, highlighting that African and European countries were heavily affected by the change at the end of 2000s. Additionally, smaller countries in terms of population were more likely to experience higher import dependency.
+
+While this analysis provides meaningful insight into general trends in global rice trade, it has many limitations. Information on factors such as environmental change, technological advancement on farming and transportation, which have significant impact in rice production and trade, were not included in the data but likely play a significant role in influencing rice production and trade patterns. Additionally, the re-routing and re-exporting of rice through intermediary countries complicates the accuracy of the data, potentially distorting the results.
